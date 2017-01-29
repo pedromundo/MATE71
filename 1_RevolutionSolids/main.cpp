@@ -455,9 +455,9 @@ GLint main(GLint argc, GLchar **argv)
 
 	Model = glm::mat4(1.0f);
 	View = glm::lookAt(
-		glm::vec3(3, 3, 3), // Camera is at (3,3,3), in World Space
-		glm::vec3(0, 0, 0), // and looks at the origin
-		glm::vec3(0, 1, 0)  // Head is up (set to 0,-1,0 to look upside-down)
+		glm::vec3(0, 0, 3), //eye
+		glm::vec3(0, 0, 0), //focus
+		glm::vec3(0, 1, 0)  //up
 		);
 	Projection = glm::perspective(glm::radians(60.0f), (GLfloat)wWidth / (GLfloat)wHeight, 0.1f, 100.0f);
 

@@ -214,7 +214,7 @@ GLvoid shaderPlumbing(){
 	glUniformMatrix4fv(MVPId, 1, GL_FALSE, glm::value_ptr(MVP));
 
 	//position data
-	glBindVertexArray(VertexArrayIDs[0]);
+	//glBindVertexArray(VertexArrayIDs[0]);
 	glBindBuffer(GL_ARRAY_BUFFER, vertexbuffers[0]);
 	glEnableVertexAttribArray(glGetAttribLocation(basicShader, "aPosition"));
 	glVertexAttribPointer(glGetAttribLocation(basicShader, "aPosition"), 3, GL_FLOAT, GL_FALSE, 0, (GLvoid*)0);
@@ -225,6 +225,7 @@ GLvoid shaderPlumbing(){
 	glVertexAttribPointer(glGetAttribLocation(basicShader, "aColor"), 4, GL_FLOAT, GL_FALSE, 0, (GLvoid*)0);
 
 	glBindBuffer(GL_ARRAY_BUFFER, 0);
+
 }
 
 GLvoid shaderPlumbingGUI(){
@@ -232,7 +233,7 @@ GLvoid shaderPlumbingGUI(){
 	glPointSize(2);
 
 	//position data
-	glBindVertexArray(VertexArrayIDs[0]);
+	//glBindVertexArray(VertexArrayIDs[0]);
 	glBindBuffer(GL_ARRAY_BUFFER, vertexbuffers[2]);
 	glEnableVertexAttribArray(glGetAttribLocation(GUIShader, "aPosition"));
 	glVertexAttribPointer(glGetAttribLocation(GUIShader, "aPosition"), 3, GL_FLOAT, GL_FALSE, 0, (GLvoid*)0);
@@ -260,6 +261,8 @@ GLvoid display(GLvoid){
 	glDisable(GL_CULL_FACE);
 	glDisable(GL_TEXTURE_2D);
 
+	glBindVertexArray(VertexArrayIDs[0]);
+
 	if (faces.empty()){
 		//initBufferData();
 		glUseProgram(basicShader);
@@ -274,6 +277,7 @@ GLvoid display(GLvoid){
 		glViewport(wWidth / 2, 0, wWidth / 2, wHeight);
 		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, vertexbuffers[4]);
 		glDrawElements(GL_TRIANGLES, faces.size(), GL_UNSIGNED_INT, (void*)0);
+		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
 	}
 
 	glDisable(GL_DEPTH_TEST);
@@ -287,8 +291,7 @@ GLvoid display(GLvoid){
 	glutSwapBuffers();
 	glutPostRedisplay();
 
-	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
-
+	glBindVertexArray(0);
 }
 
 GLvoid initShaders() {

@@ -22,7 +22,7 @@ GLuint wWidth = 1280, wHeight = 480;
 //Data Dimensions
 GLuint dWidth = 1280, dHeight = 480;
 //Handlers for the VBO and FBOs
-GLuint VertexArrayIDs[1], vertexbuffers[5], generatedcurvepoints, generatedrevolutionsteps, curvepoints = 10;
+GLuint VertexArrayIDs[1], vertexbuffers[5], generatedcurvepoints, generatedrevolutionsteps, curvepoints = 30;
 GLchar rotationAxis = 'y';
 //MVP Matrices
 glm::mat4 Projection, View, Model;
@@ -112,9 +112,10 @@ void generateSolid(GLint steps){
 					rotation = glm::rotate(Model, glm::radians(step*currStep), glm::vec3(0, 0, 1));
 					break;
 				}
+
 				glm::vec4 rotatedPoint = rotation * point;
 				slices[currStep].push_back({ rotatedPoint.x, rotatedPoint.y, rotatedPoint.z });
-				colors.push_back({ 1.0f, 1.0f, 1.0f, 1.0f });
+				colors.push_back({ abs(rotatedPoint.x), abs(rotatedPoint.y), abs(rotatedPoint.z), 1.0f });
 			}
 		}
 
@@ -456,7 +457,7 @@ GLint main(GLint argc, GLchar **argv)
 	Model = glm::mat4(1.0f);
 	View = glm::lookAt(
 		glm::vec3(0, 0, 3), //eye
-		glm::vec3(0, 0, 0), //focus
+		glm::vec3(0, 0, 0), //center
 		glm::vec3(0, 1, 0)  //up
 		);
 	Projection = glm::perspective(glm::radians(60.0f), (GLfloat)wWidth / (GLfloat)wHeight, 0.1f, 100.0f);

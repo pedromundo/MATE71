@@ -11,7 +11,7 @@ typedef struct Point{
 	GLfloat y;
 	GLfloat z;	
 	Point() { }
-	Point(float x, float y, float z) : x(x), y(y), z(z) {}
+	Point(GLfloat x, GLfloat y, GLfloat z) : x(x), y(y), z(z) {}
 } Point;
 
 Point operator + (Point a, Point b) {
@@ -22,7 +22,7 @@ Point operator - (Point a, Point b) {
 	return Point(a.x - b.x, a.y - b.y, a.z - b.z);
 }
 
-Point operator * (float s, Point a) {
+Point operator * (GLfloat s, Point a) {
 	return Point(s * a.x, s * a.y, s * a.z);
 }
 

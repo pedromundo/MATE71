@@ -1,4 +1,5 @@
 //OpenGL Stuff
+#include <algorithm>
 #include <GL/glew.h>
 #include <GL/glut.h>
 #include <glm/glm.hpp>
@@ -16,13 +17,16 @@
 GLvoid reshape(GLint x, GLint y);
 
 //Shader Program Handle
-GLuint basicShader, GUIShader;
+GLuint basicShader, GUIShader, axisShader;
 //Window Dimensions
 GLuint wWidth = 1280, wHeight = 480;
 //Data Dimensions
 GLuint dWidth = 1280, dHeight = 480;
 //Handlers for the VBO and FBOs
-GLuint VertexArrayIDs[1], vertexbuffers[5], generatedcurvepoints, generatedrevolutionsteps, curvepoints = 30;
+GLuint VertexArrayIDs[1], vertexbuffers[7];
+//Control curve and revolution control variables
+GLuint generatedcurvepoints, generatedrevolutionsteps, curvepoints = 30;
+//Revolution rotation axis
 GLchar rotationAxis = 'y';
 //MVP Matrices
 glm::mat4 Projection, View, Model;
@@ -32,12 +36,14 @@ GLfloat deltaAngleX = 0.0f, deltaAngleY = 0.0f;
 GLint xOrigin = -1, yOrigin = -1;
 GLboolean isDragging = false;
 
-//Using std::vector because ffs no one wants to work with arrays in 2016
+//Buffer data vectors
 std::vector<Point> controlPoints;
 std::vector<Color> controlPointsColors;
 std::vector<Point> points;
 std::vector<Color> colors;
 std::vector<GLuint> faces;
+
+Point* heldPoint;
 
 GLvoid initControlPointBufferData(){
 	glBindBuffer(GL_ARRAY_BUFFER, vertexbuffers[2]);
@@ -57,6 +63,30 @@ GLvoid initBufferData(){
 	glBufferData(GL_ARRAY_BUFFER, 4 * sizeof(GLfloat)*colors.size(), colors.data(), GL_STATIC_DRAW);
 
 	glBindBuffer(GL_ARRAY_BUFFER, 0);
+}
+
+GLvoid initReferenceBufferData(){
+	std::vector<Point> axisPoints(4);
+	axisPoints[0] = { 0.0, 0.0, 0.0 };
+	axisPoints[1] = { 2.0, 0.0, 0.0 };
+	axisPoints[2] = { 0.0, 2.0, 0.0 };
+	axisPoints[3] = { 0.0, 0.0, 2.0 };
+
+	glBindBuffer(GL_ARRAY_BUFFER, vertexbuffers[5]);
+	glBufferData(GL_ARRAY_BUFFER, 3 * sizeof(GLfloat) * 4, axisPoints.data(), GL_STATIC_DRAW);
+	glBindBuffer(GL_ARRAY_BUFFER, 0);
+
+	std::vector<GLuint> lineIDs(6);
+	lineIDs[0] = 0;
+	lineIDs[1] = 1;
+	lineIDs[2] = 0;
+	lineIDs[3] = 2;
+	lineIDs[4] = 0;
+	lineIDs[5] = 3;
+
+	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, vertexbuffers[6]);
+	glBufferData(GL_ELEMENT_ARRAY_BUFFER, 2 * sizeof(GLuint)*lineIDs.size(), lineIDs.data(), GL_STATIC_DRAW);
+	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
 }
 
 
@@ -81,7 +111,7 @@ GLvoid resetRevolution(){
 	}
 }
 
-GLvoid resetDrawing(){
+GLvoid resetDrawing(){	
 	points.clear();
 	colors.clear();
 	faces.clear();
@@ -183,10 +213,9 @@ void generateFaces(){
 }
 
 void generateCurve(GLint numPoints){
+	resetDrawing();
 	if (!controlPoints.empty()){
 		GLdouble step = 1.0 / numPoints;
-		resetDrawing();
-
 		points.push_back(controlPoints.front());
 		colors.push_back({ 1.0f, 1.0f, 1.0f, 1.0f });
 
@@ -206,11 +235,10 @@ void generateCurve(GLint numPoints){
 }
 
 GLvoid shaderPlumbing(){
-	//Point size 1 looks like shit
-	glPointSize(2);
+	glPointSize(1);
 
 	//MVP matrix
-	glm::mat4 MVP = Projection * Model * View;
+	glm::mat4 MVP = Projection * View * Model;
 	GLuint MVPId = glGetUniformLocation(basicShader, "MVP");
 	glUniformMatrix4fv(MVPId, 1, GL_FALSE, glm::value_ptr(MVP));
 
@@ -229,9 +257,26 @@ GLvoid shaderPlumbing(){
 
 }
 
+GLvoid shaderPlumbingAxis(){
+	glLineWidth(2);
+
+	//MVP matrix
+	glm::mat4 MVP = Projection * View * Model;
+	GLuint MVPId = glGetUniformLocation(axisShader, "MVP");
+	glUniformMatrix4fv(MVPId, 1, GL_FALSE, glm::value_ptr(MVP));
+
+	//position data
+	//glBindVertexArray(VertexArrayIDs[0]);
+	glBindBuffer(GL_ARRAY_BUFFER, vertexbuffers[5]);
+	glEnableVertexAttribArray(glGetAttribLocation(axisShader, "aPosition"));
+	glVertexAttribPointer(glGetAttribLocation(axisShader, "aPosition"), 3, GL_FLOAT, GL_FALSE, 0, (GLvoid*)0);
+	glBindBuffer(GL_ARRAY_BUFFER, 0);
+
+}
+
 GLvoid shaderPlumbingGUI(){
 	//Point size 1 looks like shit
-	glPointSize(2);
+	glPointSize(5);
 
 	//position data
 	//glBindVertexArray(VertexArrayIDs[0]);
@@ -265,14 +310,12 @@ GLvoid display(GLvoid){
 	glBindVertexArray(VertexArrayIDs[0]);
 
 	if (faces.empty()){
-		//initBufferData();
 		glUseProgram(basicShader);
 		shaderPlumbing();
 		glViewport(wWidth / 2, 0, wWidth / 2, wHeight);
 		glDrawArrays(GL_POINTS, 0, (GLsizei)points.size());
 	}
 	else{
-		//initBufferData();
 		glUseProgram(basicShader);
 		shaderPlumbing();
 		glViewport(wWidth / 2, 0, wWidth / 2, wHeight);
@@ -281,9 +324,15 @@ GLvoid display(GLvoid){
 		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
 	}
 
+	glUseProgram(axisShader);
+	shaderPlumbingAxis();
+	glViewport(wWidth / 2, 0, wWidth / 2, wHeight);
+	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, vertexbuffers[6]);
+	glDrawElements(GL_LINES, 6, GL_UNSIGNED_INT, (void*)0);
+	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+
 	glDisable(GL_DEPTH_TEST);
 
-	//initControlPointBufferData();
 	glUseProgram(GUIShader);
 	shaderPlumbingGUI();
 	glViewport(0, 0, wWidth / 2, wHeight);
@@ -298,6 +347,7 @@ GLvoid display(GLvoid){
 GLvoid initShaders() {
 	basicShader = InitShader("basicShader.vert", "basicShader.frag");
 	GUIShader = InitShader("GUIShader.vert", "GUIShader.frag");
+	axisShader = InitShader("axisShader.vert", "axisShader.frag");
 }
 
 GLvoid keyboard(GLubyte key, GLint x, GLint y)
@@ -318,6 +368,7 @@ GLvoid keyboard(GLubyte key, GLint x, GLint y)
 		break;
 	case 'C':
 		resetDrawing();
+		controlPoints.clear();
 		break;
 	case 'c':
 		generateCurve(curvepoints);
@@ -331,7 +382,7 @@ GLvoid keyboard(GLubyte key, GLint x, GLint y)
 		updateTitle();
 		break;
 	case '-':
-		if (curvepoints > 2){
+		if (curvepoints > 3){
 			--curvepoints;
 		}
 		generateCurve(curvepoints);
@@ -369,37 +420,55 @@ GLvoid mouseHandler(GLint button, GLint state, GLint x, GLint y){
 	winY = wHeight - (GLfloat)y;
 	glReadPixels(int(winX), int(winY), 1, 1, GL_DEPTH_COMPONENT, GL_FLOAT, &winZ);
 
-	if (winX <= wWidth / 2){
-		if (state == GLUT_UP && !isDragging){
-			glGetDoublev(GL_MODELVIEW_MATRIX, modelview);
-			glGetDoublev(GL_PROJECTION_MATRIX, projection);
-			glGetIntegerv(GL_VIEWPORT, viewport);
+	glGetDoublev(GL_MODELVIEW_MATRIX, modelview);
+	glGetDoublev(GL_PROJECTION_MATRIX, projection);
+	glGetIntegerv(GL_VIEWPORT, viewport);
+	gluUnProject(winX, winY, winZ, modelview, projection, viewport, &posX, &posY, &posZ);
 
-			winX = (GLfloat)x;
-			winY = wHeight - (GLfloat)y;
-			gluUnProject(winX, winY, winZ, modelview, projection, viewport, &posX, &posY, &posZ);
+	if (button == GLUT_LEFT_BUTTON){
+		if (winX <= wWidth / 2){
+			if (state == GLUT_UP && !isDragging){
+				controlPoints.push_back({ (GLfloat)posX, (GLfloat)posY, (GLfloat)posZ });
+				controlPointsColors.push_back({ 1, 1, 1, 1.0f });
+				initControlPointBufferData();
 
-			controlPoints.push_back({ (GLfloat)posX, (GLfloat)posY, (GLfloat)posZ });
-			controlPointsColors.push_back({ 1, 1, 1, 1.0f });
-			initControlPointBufferData();
+				generateCurve(curvepoints);
 
-			generateCurve(curvepoints);
-
-			printf("Window (bottom left based): %.0f %.0f\n", winX, winY);
-			printf("World: %lf %lf %lf\n", posX, posY, posZ);
-			isDragging = false;
-		}
-	}
-	else{
-		if (state == GLUT_UP) {
-			xOrigin = -1;
-			yOrigin = -1;
-			isDragging = false;
+				printf("Window (bottom left based): %.0f %.0f\n", winX, winY);
+				printf("World: %lf %lf %lf\n", posX, posY, posZ);
+				isDragging = false;
+			}
 		}
 		else{
 			xOrigin = x;
 			yOrigin = y;
 			isDragging = true;
+		}
+		if (state == GLUT_UP) {
+			xOrigin = -1;
+			yOrigin = -1;
+			isDragging = false;
+		}
+	}
+	else if (GLUT_RIGHT_BUTTON){
+		auto heldPointIterator = std::find_if(controlPoints.begin(), controlPoints.end(), [posX, posY](Point a)->bool { return abs(a.x - posX) < 0.03 && abs(a.y - posY) < 0.03; });
+		if (winX <= wWidth / 2){
+			if (state == GLUT_DOWN){
+				if (controlPoints.end() != heldPointIterator){
+					heldPoint = &*heldPointIterator;
+					printf("Point Held: %lf %lf\n", (*heldPoint).x, (*heldPoint).y);
+				}
+			}
+			else if (state == GLUT_UP){
+				if (glutGetModifiers() & GLUT_ACTIVE_SHIFT){
+					if (controlPoints.end() != heldPointIterator && (controlPoints.begin() != controlPoints.end())){
+						controlPoints.erase(heldPointIterator);
+						initControlPointBufferData();
+					}
+				}
+				generateCurve(curvepoints);
+				heldPoint = NULL;
+			}
 		}
 	}
 }
@@ -408,21 +477,43 @@ void mouseMove(GLint x, GLint y) {
 
 	// this will only be true when the left button is down
 	if (xOrigin >= 0) {
-
 		// update deltaAngle
 		deltaAngleX = (x - xOrigin) * 0.1f;
 		xOrigin = x;
 
-		View = glm::rotate(View, glm::radians(deltaAngleX), glm::vec3(0.0, 1.0, 0.0));
+		glm::vec3 xRotation = glm::vec3(glm::vec4(0.0, 1.0, 0.0, 1.0)*View);
+		View = glm::rotate(View, glm::radians(deltaAngleX), xRotation);
 	}
 
 	if (yOrigin >= 0) {
-
 		// update deltaAngle
 		deltaAngleY = (y - yOrigin) * 0.1f;
 		yOrigin = y;
 
-		View = glm::rotate(View, glm::radians(deltaAngleY), glm::vec3(1.0, 0.0, 0.0));
+		glm::vec3 yRotation = glm::vec3(glm::vec4(1.0, 0.0, 0.0, 1.0)*View);
+		View = glm::rotate(View, glm::radians(deltaAngleY), yRotation);
+	}
+
+	if (heldPoint != NULL){
+		GLint viewport[4];
+		GLdouble modelview[16];
+		GLdouble projection[16];
+		GLfloat winX, winY, winZ;
+		GLdouble posX, posY, posZ;
+
+		winX = (GLfloat)x;
+		winY = wHeight - (GLfloat)y;
+		glReadPixels(GLint(winX), GLint(winY), 1, 1, GL_DEPTH_COMPONENT, GL_FLOAT, &winZ);
+
+		glGetDoublev(GL_MODELVIEW_MATRIX, modelview);
+		glGetDoublev(GL_PROJECTION_MATRIX, projection);
+		glGetIntegerv(GL_VIEWPORT, viewport);
+		gluUnProject(winX, winY, winZ, modelview, projection, viewport, &posX, &posY, &posZ);
+
+		(*heldPoint).x = (GLfloat)posX;
+		(*heldPoint).y = (GLfloat)posY;
+		(*heldPoint).z = (GLfloat)posY;
+		initControlPointBufferData();
 	}
 }
 
@@ -456,11 +547,11 @@ GLint main(GLint argc, GLchar **argv)
 
 	Model = glm::mat4(1.0f);
 	View = glm::lookAt(
-		glm::vec3(0, 0, 3), //eye
+		glm::vec3(3, 3, 3), //eye
 		glm::vec3(0, 0, 0), //center
 		glm::vec3(0, 1, 0)  //up
 		);
-	Projection = glm::perspective(glm::radians(60.0f), (GLfloat)wWidth / (GLfloat)wHeight, 0.1f, 100.0f);
+	Projection = glm::perspective(glm::radians(45.0f), (GLfloat)wWidth / (GLfloat)wHeight, 0.1f, 100.0f);
 
 #if defined(__linux__)
 	setenv("DISPLAY", ":0", 0);
@@ -472,9 +563,11 @@ GLint main(GLint argc, GLchar **argv)
 	}
 
 	glGenVertexArrays(1, VertexArrayIDs);
-	glGenBuffers(5, vertexbuffers);
+	glGenBuffers(7, vertexbuffers);
 
 	initShaders();
+
+	initReferenceBufferData();
 
 	glutMainLoop();
 }

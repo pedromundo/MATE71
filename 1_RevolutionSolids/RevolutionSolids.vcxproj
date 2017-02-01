@@ -19,6 +19,8 @@
     <ClInclude Include="myDataStructures.h" />
   </ItemGroup>
   <ItemGroup>
+    <None Include="axisShader.frag" />
+    <None Include="axisShader.vert" />
     <None Include="basicShader.frag" />
     <None Include="basicShader.vert" />
     <None Include="GUIShader.frag" />

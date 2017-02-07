@@ -72,6 +72,7 @@
     <PostBuildEvent>
       <Command>copy ".\bindepends\*" "$(OutDir)"
 copy "basicShader.*" "$(OutDir)"
+copy "axisShader.*" "$(OutDir)"
 copy "GUIShader.*" "$(OutDir)"</Command>
     </PostBuildEvent>
     <CudaCompile>
@@ -98,6 +99,7 @@ copy "GUIShader.*" "$(OutDir)"</Command>
     <PostBuildEvent>
       <Command>copy ".\bindepends\*" "$(OutDir)"
 copy "basicShader.*" "$(OutDir)"
+copy "axisShader.*" "$(OutDir)"
 copy "GUIShader.*" "$(OutDir)"</Command>
     </PostBuildEvent>
     <CudaCompile>

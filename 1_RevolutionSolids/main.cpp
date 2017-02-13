@@ -16,7 +16,7 @@
 
 GLvoid reshape(GLint x, GLint y);
 
-//Shader Program Handle
+//Shader Program Handles
 GLuint basicShader, GUIShader, axisShader;
 //Window Dimensions
 GLuint wWidth = 1280, wHeight = 480;
@@ -25,11 +25,17 @@ GLuint dWidth = 1280, dHeight = 480;
 //Handlers for the VBO and FBOs
 GLuint VertexArrayIDs[1], vertexbuffers[7];
 //Control curve and revolution control variables
-GLuint generatedcurvepoints, generatedrevolutionsteps, curvepoints = 30;
+GLuint generatedcurvepoints, generatedrevolutionsteps, curvepoints = 30, revolutionSteps = 30;
 //Revolution rotation axis
 GLchar rotationAxis = 'y';
+//OpenGL rendering mode
+GLenum viewMode = GL_TRIANGLES;
 //MVP Matrices
 glm::mat4 Projection, View, Model;
+
+//Camera Zoom Variables
+GLfloat orthoBoxSize = 3.0f, perspFOV = 45.0f;
+GLchar currentView = '4';
 
 //Camera Movement variables
 GLfloat deltaAngleX = 0.0f, deltaAngleY = 0.0f;
@@ -111,7 +117,7 @@ GLvoid resetRevolution(){
 	}
 }
 
-GLvoid resetDrawing(){	
+GLvoid resetDrawing(){
 	points.clear();
 	colors.clear();
 	faces.clear();
@@ -119,7 +125,7 @@ GLvoid resetDrawing(){
 	glutPostRedisplay();
 }
 
-void generateSolid(GLint steps){
+void rotatePoints(GLint steps){
 	if (!points.empty()){
 		resetRevolution();
 		std::vector<std::vector<Point>>slices(steps);
@@ -294,7 +300,7 @@ GLvoid shaderPlumbingGUI(){
 GLvoid updateTitle(){
 	stringstream ss;
 	string target;
-	ss << "Assignment 1 - Revolution Solids - Current Revolution Axis: [" << rotationAxis << "]" << " - Current Curve Complexity:" << "[" << curvepoints << "]";
+	ss << "Assignment 1 - Revolution Solids - Current Revolution Axis: [" << rotationAxis << "]" << " - Current Curve Complexity:" << "[" << curvepoints << "] - Revolution Steps:" << "[" << revolutionSteps << "]";
 	glutSetWindowTitle(ss.str().c_str());
 }
 
@@ -320,7 +326,7 @@ GLvoid display(GLvoid){
 		shaderPlumbing();
 		glViewport(wWidth / 2, 0, wWidth / 2, wHeight);
 		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, vertexbuffers[4]);
-		glDrawElements(GL_TRIANGLES, faces.size(), GL_UNSIGNED_INT, (void*)0);
+		glDrawElements(viewMode, faces.size(), GL_UNSIGNED_INT, (void*)0);
 		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
 	}
 
@@ -350,21 +356,94 @@ GLvoid initShaders() {
 	axisShader = InitShader("axisShader.vert", "axisShader.frag");
 }
 
+GLvoid generateFullRevolutionSolid(){
+	generateCurve(curvepoints);
+	rotatePoints(revolutionSteps);
+	generateFaces();
+}
+
+GLvoid updateProjection(){
+	switch (currentView){
+	case '1':
+		View = glm::lookAt(
+			glm::vec3(3, 0, 0), //eye
+			glm::vec3(0, 0, 0), //center
+			glm::vec3(0, 1, 0)  //up
+			);
+		Projection = glm::ortho(-orthoBoxSize, orthoBoxSize, -orthoBoxSize, orthoBoxSize, 0.0f, 100.0f);
+		break;
+	case '2':
+		View = glm::lookAt(
+			glm::vec3(0, 3, 0), //eye
+			glm::vec3(0, 0, 0), //center
+			glm::vec3(1, 0, 0)  //up
+			);
+		Projection = glm::ortho(-orthoBoxSize, orthoBoxSize, -orthoBoxSize, orthoBoxSize, 0.0f, 100.0f);
+		break;
+	case '3':
+		View = glm::lookAt(
+			glm::vec3(0, 0, 3), //eye
+			glm::vec3(0, 0, 0), //center
+			glm::vec3(0, 1, 0)  //up
+			);
+		Projection = glm::ortho(-orthoBoxSize, orthoBoxSize, -orthoBoxSize, orthoBoxSize, 0.0f, 100.0f);
+		break;
+	case '4':
+		View = glm::lookAt(
+			glm::vec3(3, 3, 3), //eye
+			glm::vec3(0, 0, 0), //center
+			glm::vec3(0, 1, 0)  //up
+			);
+		Projection = glm::perspective(glm::radians(perspFOV), (GLfloat)wWidth / (GLfloat)wHeight, 0.1f, 100.0f);
+		break;
+	}
+}
+
+GLvoid updateProjectionZoom(){
+	switch (currentView){
+	case '1':
+	case '2':
+	case '3':
+		Projection = glm::ortho(-orthoBoxSize, orthoBoxSize, -orthoBoxSize, orthoBoxSize, 0.0f, 100.0f);
+		break;
+	case '4':
+		Projection = glm::perspective(glm::radians(perspFOV), (GLfloat)wWidth / (GLfloat)wHeight, 0.1f, 100.0f);
+		break;
+	}
+}
+
 GLvoid keyboard(GLubyte key, GLint x, GLint y)
 {
 	switch (key)
 	{
+	case 'q':
+		viewMode = GL_POINTS;
+		break;
+	case 'w':
+		viewMode = GL_LINES;
+		break;
+	case 'e':
+		viewMode = GL_TRIANGLES;
+		break;
+	case '1':
+	case '2':
+	case '3':
+	case '4':
+		currentView = key;
+		updateProjection();
+		break;
 	case 'x':
 	case 'y':
 	case 'z':
 		rotationAxis = key;
 		updateTitle();
+		generateFullRevolutionSolid();
 		break;
 	case 'R':
 		resetRevolution();
 		break;
 	case 'r':
-		generateSolid(30);
+		rotatePoints(revolutionSteps);
 		break;
 	case 'C':
 		resetDrawing();
@@ -376,17 +455,44 @@ GLvoid keyboard(GLubyte key, GLint x, GLint y)
 	case 'f':
 		generateFaces();
 		break;
-	case '=':
-		++curvepoints;
-		generateCurve(curvepoints);
-		updateTitle();
-		break;
-	case '-':
+	case 'a':
 		if (curvepoints > 3){
 			--curvepoints;
 		}
-		generateCurve(curvepoints);
+		generateFullRevolutionSolid();
 		updateTitle();
+		break;
+	case 's':
+		++curvepoints;
+		generateFullRevolutionSolid();
+		updateTitle();
+		break;
+	case ',':
+		if (revolutionSteps > 3){
+			--revolutionSteps;
+		}
+		generateFullRevolutionSolid();
+		updateTitle();
+		break;
+	case '.':
+		++revolutionSteps;
+		generateFullRevolutionSolid();
+		updateTitle();
+		break;
+	case '0':
+		orthoBoxSize = 3.0f;
+		perspFOV = 45.0f;
+		updateProjectionZoom();
+		break;
+	case '=':
+		orthoBoxSize *= 1.1;
+		perspFOV *= 0.9;
+		updateProjectionZoom();
+		break;
+	case '-':
+		orthoBoxSize *= 0.9;
+		perspFOV *= 1.1;
+		updateProjectionZoom();
 		break;
 	case 27:
 #if defined (__APPLE__) || defined(MACOSX)
@@ -418,7 +524,7 @@ GLvoid mouseHandler(GLint button, GLint state, GLint x, GLint y){
 
 	winX = (GLfloat)x;
 	winY = wHeight - (GLfloat)y;
-	glReadPixels(int(winX), int(winY), 1, 1, GL_DEPTH_COMPONENT, GL_FLOAT, &winZ);
+	glReadPixels(GLint(winX), GLint(winY), 1, 1, GL_DEPTH_COMPONENT, GL_FLOAT, &winZ);
 
 	glGetDoublev(GL_MODELVIEW_MATRIX, modelview);
 	glGetDoublev(GL_PROJECTION_MATRIX, projection);
@@ -432,7 +538,7 @@ GLvoid mouseHandler(GLint button, GLint state, GLint x, GLint y){
 				controlPointsColors.push_back({ 1, 1, 1, 1.0f });
 				initControlPointBufferData();
 
-				generateCurve(curvepoints);
+				generateFullRevolutionSolid();
 
 				printf("Window (bottom left based): %.0f %.0f\n", winX, winY);
 				printf("World: %lf %lf %lf\n", posX, posY, posZ);
@@ -466,7 +572,7 @@ GLvoid mouseHandler(GLint button, GLint state, GLint x, GLint y){
 						initControlPointBufferData();
 					}
 				}
-				generateCurve(curvepoints);
+				generateFullRevolutionSolid();
 				heldPoint = NULL;
 			}
 		}
@@ -525,7 +631,7 @@ GLint initGL(GLint *argc, GLchar **argv)
 	glutInitWindowSize(wWidth, wHeight);
 	stringstream ss;
 	string target;
-	ss << "Assignment 1 - Revolution Solids - Current Revolution Axis: [" << rotationAxis << "]" << " - Current Curve Complexity:" << "[" << curvepoints << "]";
+	ss << "Assignment 1 - Revolution Solids - Current Revolution Axis: [" << rotationAxis << "]" << " - Current Curve Complexity:" << "[" << curvepoints << "] - Revolution Steps:" << "[" << revolutionSteps << "]";
 	glutCreateWindow(ss.str().c_str());
 	glutDisplayFunc(display);
 	glutKeyboardFunc(keyboard);
@@ -551,7 +657,7 @@ GLint main(GLint argc, GLchar **argv)
 		glm::vec3(0, 0, 0), //center
 		glm::vec3(0, 1, 0)  //up
 		);
-	Projection = glm::perspective(glm::radians(45.0f), (GLfloat)wWidth / (GLfloat)wHeight, 0.1f, 100.0f);
+	Projection = glm::perspective(glm::radians(perspFOV), (GLfloat)wWidth / (GLfloat)wHeight, 0.1f, 100.0f);
 
 #if defined(__linux__)
 	setenv("DISPLAY", ":0", 0);

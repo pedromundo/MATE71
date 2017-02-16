@@ -5,6 +5,7 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp> 
+#include <SOIL.h>
 #include <stdio.h>
 #include <math.h>
 #include <string>
@@ -23,7 +24,7 @@ GLuint wWidth = 1280, wHeight = 480;
 //Data Dimensions
 GLuint dWidth = 1280, dHeight = 480;
 //Handlers for the VBO and FBOs
-GLuint VertexArrayIDs[1], vertexbuffers[7];
+GLuint VertexArrayIDs[1], vertexbuffers[8], textureBuffers[1];
 //Control curve and revolution control variables
 GLuint generatedcurvepoints, generatedrevolutionsteps, curvepoints = 30, revolutionSteps = 30;
 //Revolution rotation axis
@@ -46,12 +47,19 @@ GLboolean isDragging = false;
 std::vector<Point> controlPoints;
 std::vector<Color> controlPointsColors;
 std::vector<Point> points;
+std::vector<Point> normals;
 std::vector<Color> colors;
+std::vector<glm::vec2> uvs;
 std::vector<GLuint> faces;
 
-Point* heldPoint;
+glm::vec3 lightPos(3);
+glm::vec3 eyePos(3);
 
-GLvoid initControlPointBufferData(){
+Point* heldPoint;
+GLint wTex, hTex;
+GLubyte* texture;
+
+GLvoid initControlPointBufferData() {
 	glBindBuffer(GL_ARRAY_BUFFER, vertexbuffers[2]);
 	glBufferData(GL_ARRAY_BUFFER, 3 * sizeof(GLfloat)*controlPoints.size(), controlPoints.data(), GL_STATIC_DRAW);
 
@@ -61,17 +69,20 @@ GLvoid initControlPointBufferData(){
 	glBindBuffer(GL_ARRAY_BUFFER, 0);
 }
 
-GLvoid initBufferData(){
+GLvoid initBufferData() {
 	glBindBuffer(GL_ARRAY_BUFFER, vertexbuffers[0]);
 	glBufferData(GL_ARRAY_BUFFER, 3 * sizeof(GLfloat)*points.size(), points.data(), GL_STATIC_DRAW);
 
 	glBindBuffer(GL_ARRAY_BUFFER, vertexbuffers[1]);
 	glBufferData(GL_ARRAY_BUFFER, 4 * sizeof(GLfloat)*colors.size(), colors.data(), GL_STATIC_DRAW);
 
+	glBindBuffer(GL_ARRAY_BUFFER, vertexbuffers[7]);
+	glBufferData(GL_ARRAY_BUFFER, 3 * sizeof(GLfloat)*normals.size(), normals.data(), GL_STATIC_DRAW);
+
 	glBindBuffer(GL_ARRAY_BUFFER, 0);
 }
 
-GLvoid initReferenceBufferData(){
+GLvoid initReferenceBufferData() {
 	std::vector<Point> axisPoints(4);
 	axisPoints[0] = { 0.0, 0.0, 0.0 };
 	axisPoints[1] = { 2.0, 0.0, 0.0 };
@@ -107,8 +118,8 @@ Point getBezierPoint3D(std::vector<Point> points, GLint numPoints, GLfloat t) {
 	return answer;
 }
 
-GLvoid resetRevolution(){
-	if (points.size() > generatedcurvepoints){
+GLvoid resetRevolution() {
+	if (points.size() > generatedcurvepoints) {
 		points.erase(points.begin() + generatedcurvepoints, points.end());
 		colors.erase(colors.begin() + generatedcurvepoints, colors.end());
 		faces.clear();
@@ -117,22 +128,23 @@ GLvoid resetRevolution(){
 	}
 }
 
-GLvoid resetDrawing(){
+GLvoid resetDrawing() {
 	points.clear();
+	normals.clear();
 	colors.clear();
 	faces.clear();
 	glutSwapBuffers();
 	glutPostRedisplay();
 }
 
-void rotatePoints(GLint steps){
-	if (!points.empty()){
+void rotatePoints(GLint steps) {
+	if (!points.empty()) {
 		resetRevolution();
 		std::vector<std::vector<Point>>slices(steps);
 		GLfloat step = 360.0f / steps;
 		for (GLint currStep = 1; currStep < steps; ++currStep)
 		{
-			for (auto pt : points){
+			for (auto pt : points) {
 				glm::vec4 point = glm::vec4(pt.x, pt.y, pt.z, 1);
 				glm::mat4 rotation;
 				switch (rotationAxis)
@@ -157,57 +169,125 @@ void rotatePoints(GLint steps){
 
 		generatedrevolutionsteps = slices.size();
 
-		for (auto slice : slices){
+		for (auto slice : slices) {
 			points.insert(points.end(), slice.begin(), slice.end());
 		}
 		initBufferData();
 	}
 }
 
-void generateFaces(){
-	if (points.size() > generatedcurvepoints){
+void generateFaces() {
+	if (points.size() > generatedcurvepoints) {
 		faces.clear();
+		normals.clear();
 		int numpoints = generatedrevolutionsteps * generatedcurvepoints;
 		int lastlineindex = numpoints - generatedcurvepoints;
-		for (GLint i = 0; i < numpoints; ++i){
-			if (i < lastlineindex){
-				if (i % generatedcurvepoints == 0){
+		for (GLint i = 0; i < numpoints; ++i) {
+			if (i < lastlineindex) {
+				if (i % generatedcurvepoints == 0) {
 					faces.push_back(i);
 					faces.push_back(i + generatedcurvepoints + 1);
 					faces.push_back(i + generatedcurvepoints);
+
+					glm::vec3 A(points[i].x, points[i].y, points[i].z),
+						B(points[i + generatedcurvepoints + 1].x, points[i + generatedcurvepoints + 1].y, points[i + generatedcurvepoints + 1].z),
+						C(points[i + generatedcurvepoints].x, points[i + generatedcurvepoints].y, points[i + generatedcurvepoints].z);
+
+
+					glm::vec3 normalDirection = glm::cross((B - A), (C - A));
+					glm::vec3 normal = normalDirection / (float)normalDirection.length();
+
+					normals.push_back({ normal.x,normal.y,normal.z });
+
 				}
-				else if ((i + 1) % generatedcurvepoints == 0){
+				else if ((i + 1) % generatedcurvepoints == 0) {
 					faces.push_back(i);
 					faces.push_back(i + generatedcurvepoints);
 					faces.push_back(i - 1);
+
+					glm::vec3 A(points[i].x, points[i].y, points[i].z),
+						B(points[i + generatedcurvepoints].x, points[i + generatedcurvepoints].y, points[i + generatedcurvepoints].z),
+						C(points[i - 1].x, points[i - 1].y, points[i - 1].z);
+
+					glm::vec3 normalDirection = glm::cross((B - A), (C - A));
+					glm::vec3 normal = normalDirection / (float)normalDirection.length();
+
+					normals.push_back({ normal.x,normal.y,normal.z });
 				}
-				else{
+				else {
 					faces.push_back(i);
 					faces.push_back(i + generatedcurvepoints + 1);
 					faces.push_back(i + generatedcurvepoints);
 					faces.push_back(i);
 					faces.push_back(i + generatedcurvepoints);
 					faces.push_back(i - 1);
+
+					glm::vec3 A(points[i].x, points[i].y, points[i].z),
+						B(points[i + generatedcurvepoints + 1].x, points[i + generatedcurvepoints + 1].y, points[i + generatedcurvepoints + 1].z),
+						C(points[i + generatedcurvepoints].x, points[i + generatedcurvepoints].y, points[i + generatedcurvepoints].z),
+						D(points[i - 1].x, points[i - 1].y, points[i - 1].z);
+
+					glm::vec3 normalOneDirection = glm::cross((B - A), (C - A));
+					glm::vec3 normalOne = normalOneDirection / (float)normalOneDirection.length();
+
+					glm::vec3 normalTwoDirection = glm::cross((C - A), (D - A));
+					glm::vec3 NormalTwo = normalTwoDirection / (float)normalTwoDirection.length();
+
+					glm::vec3 normalFinal = glm::mix(normalOne, NormalTwo, 0.5);
+					normals.push_back({ normalFinal.x,normalFinal.y,normalFinal.z });
 				}
 			}
-			else{
-				if (i % generatedcurvepoints == 0){
+			else {
+				if (i % generatedcurvepoints == 0) {
 					faces.push_back(i);
 					faces.push_back(i % lastlineindex + 1);
 					faces.push_back(i % lastlineindex);
+
+					glm::vec3 A(points[i].x, points[i].y, points[i].z),
+						B(points[i % lastlineindex + 1].x, points[i % lastlineindex + 1].y, points[i % lastlineindex + 1].z),
+						C(points[i % lastlineindex].x, points[i % lastlineindex].y, points[i % lastlineindex].z);
+
+
+					glm::vec3 normalDirection = glm::cross((B - A), (C - A));
+					glm::vec3 normal = normalDirection / (float)normalDirection.length();
+
+					normals.push_back({ normal.x,normal.y,normal.z });
 				}
-				else if ((i + 1) % generatedcurvepoints == 0){
+				else if ((i + 1) % generatedcurvepoints == 0) {
 					faces.push_back(i);
 					faces.push_back(i % lastlineindex);
 					faces.push_back(i - 1);
+
+					glm::vec3 A(points[i].x, points[i].y, points[i].z),
+						B(points[i % lastlineindex].x, points[i % lastlineindex].y, points[i % lastlineindex].z),
+						C(points[i - 1].x, points[i - 1].y, points[i - 1].z);
+
+					glm::vec3 normalDirection = glm::cross((B - A), (C - A));
+					glm::vec3 normal = normalDirection / (float)normalDirection.length();
+
+					normals.push_back({ normal.x,normal.y,normal.z });
 				}
-				else{
+				else {
 					faces.push_back(i);
 					faces.push_back(i % lastlineindex + 1);
 					faces.push_back(i % lastlineindex);
 					faces.push_back(i);
 					faces.push_back(i % lastlineindex);
 					faces.push_back(i - 1);
+
+					glm::vec3 A(points[i].x, points[i].y, points[i].z),
+						B(points[i % lastlineindex + 1].x, points[i % lastlineindex + 1].y, points[i % lastlineindex + 1].z),
+						C(points[i % lastlineindex].x, points[i % lastlineindex].y, points[i % lastlineindex].z),
+						D(points[i - 1].x, points[i - 1].y, points[i - 1].z);
+
+					glm::vec3 normalOneDirection = glm::cross((B - A), (C - A));
+					glm::vec3 normalOne = normalOneDirection / (float)normalOneDirection.length();
+
+					glm::vec3 normalTwoDirection = glm::cross((C - A), (D - A));
+					glm::vec3 NormalTwo = normalTwoDirection / (float)normalTwoDirection.length();
+
+					glm::vec3 normalFinal = glm::mix(normalOne, NormalTwo, 0.5);
+					normals.push_back({ normalFinal.x,normalFinal.y,normalFinal.z });
 				}
 			}
 		}
@@ -215,12 +295,16 @@ void generateFaces(){
 		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, vertexbuffers[4]);
 		glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(GLuint)*faces.size(), faces.data(), GL_STATIC_DRAW);
 		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+
+		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, vertexbuffers[7]);
+		glBufferData(GL_ELEMENT_ARRAY_BUFFER, 3 * sizeof(GLfloat)*normals.size(), normals.data(), GL_STATIC_DRAW);
+		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
 	}
 }
 
-void generateCurve(GLint numPoints){
+void generateCurve(GLint numPoints) {
 	resetDrawing();
-	if (!controlPoints.empty()){
+	if (!controlPoints.empty()) {
 		GLdouble step = 1.0 / numPoints;
 		points.push_back(controlPoints.front());
 		colors.push_back({ 1.0f, 1.0f, 1.0f, 1.0f });
@@ -233,6 +317,7 @@ void generateCurve(GLint numPoints){
 
 		points.push_back(controlPoints.back());
 		colors.push_back({ 1.0f, 1.0f, 1.0f, 1.0f });
+		normals.push_back({ 1.0f, 1.0f, 1.0f });
 
 		generatedcurvepoints = points.size();
 
@@ -240,19 +325,37 @@ void generateCurve(GLint numPoints){
 	}
 }
 
-GLvoid shaderPlumbing(){
+GLvoid shaderPlumbing() {
 	glPointSize(1);
+
+	//MODEL matrix
+	glm::mat4 M = Model;
+	GLuint MId = glGetUniformLocation(basicShader, "M");
+	glUniformMatrix4fv(MId, 1, GL_FALSE, glm::value_ptr(M));
 
 	//MVP matrix
 	glm::mat4 MVP = Projection * View * Model;
 	GLuint MVPId = glGetUniformLocation(basicShader, "MVP");
 	glUniformMatrix4fv(MVPId, 1, GL_FALSE, glm::value_ptr(MVP));
 
+	//Lightpos vector	
+	GLuint lightPosID = glGetUniformLocation(basicShader, "lightPos_world");
+	glUniform3fv(lightPosID, 1, glm::value_ptr(lightPos));
+
+	//Eyepos vector	
+	GLuint eyePosID = glGetUniformLocation(basicShader, "eyePos_world");
+	glUniform3fv(eyePosID, 1, glm::value_ptr(eyePos));
+
 	//position data
 	//glBindVertexArray(VertexArrayIDs[0]);
 	glBindBuffer(GL_ARRAY_BUFFER, vertexbuffers[0]);
-	glEnableVertexAttribArray(glGetAttribLocation(basicShader, "aPosition"));
-	glVertexAttribPointer(glGetAttribLocation(basicShader, "aPosition"), 3, GL_FLOAT, GL_FALSE, 0, (GLvoid*)0);
+	glEnableVertexAttribArray(glGetAttribLocation(basicShader, "aPosition_object"));
+	glVertexAttribPointer(glGetAttribLocation(basicShader, "aPosition_object"), 3, GL_FLOAT, GL_FALSE, 0, (GLvoid*)0);
+
+	//normal data	
+	glBindBuffer(GL_ARRAY_BUFFER, vertexbuffers[7]);
+	glEnableVertexAttribArray(glGetAttribLocation(basicShader, "aNormal_object"));
+	glVertexAttribPointer(glGetAttribLocation(basicShader, "aNormal_object"), 3, GL_FLOAT, GL_FALSE, 0, (GLvoid*)0);
 
 	//color data
 	glBindBuffer(GL_ARRAY_BUFFER, vertexbuffers[1]);
@@ -263,7 +366,7 @@ GLvoid shaderPlumbing(){
 
 }
 
-GLvoid shaderPlumbingAxis(){
+GLvoid shaderPlumbingAxis() {
 	glLineWidth(2);
 
 	//MVP matrix
@@ -280,7 +383,7 @@ GLvoid shaderPlumbingAxis(){
 
 }
 
-GLvoid shaderPlumbingGUI(){
+GLvoid shaderPlumbingGUI() {
 	//Point size 1 looks like shit
 	glPointSize(5);
 
@@ -297,14 +400,14 @@ GLvoid shaderPlumbingGUI(){
 
 	glBindBuffer(GL_ARRAY_BUFFER, 0);
 }
-GLvoid updateTitle(){
+GLvoid updateTitle() {
 	stringstream ss;
 	string target;
 	ss << "Assignment 1 - Revolution Solids - Current Revolution Axis: [" << rotationAxis << "]" << " - Current Curve Complexity:" << "[" << curvepoints << "] - Revolution Steps:" << "[" << revolutionSteps << "]";
 	glutSetWindowTitle(ss.str().c_str());
 }
 
-GLvoid display(GLvoid){
+GLvoid display(GLvoid) {
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 	glEnable(GL_POINT_SMOOTH);
 	glEnable(GL_BLEND);
@@ -315,17 +418,17 @@ GLvoid display(GLvoid){
 
 	glBindVertexArray(VertexArrayIDs[0]);
 
-	if (faces.empty()){
+	if (faces.empty()) {
 		glUseProgram(basicShader);
 		shaderPlumbing();
 		glViewport(wWidth / 2, 0, wWidth / 2, wHeight);
 		glDrawArrays(GL_POINTS, 0, (GLsizei)points.size());
 	}
-	else{
+	else {
 		glUseProgram(basicShader);
 		shaderPlumbing();
 		glViewport(wWidth / 2, 0, wWidth / 2, wHeight);
-		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, vertexbuffers[4]);
+		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, vertexbuffers[4]);		
 		glDrawElements(viewMode, faces.size(), GL_UNSIGNED_INT, (void*)0);
 		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
 	}
@@ -356,20 +459,21 @@ GLvoid initShaders() {
 	axisShader = InitShader("axisShader.vert", "axisShader.frag");
 }
 
-GLvoid generateFullRevolutionSolid(){
+GLvoid generateFullRevolutionSolid() {
 	generateCurve(curvepoints);
 	rotatePoints(revolutionSteps);
 	generateFaces();
 }
 
-GLvoid updateProjection(){
-	switch (currentView){
+GLvoid updateProjection() {
+	switch (currentView) {
 	case '1':
 		View = glm::lookAt(
 			glm::vec3(3, 0, 0), //eye
 			glm::vec3(0, 0, 0), //center
 			glm::vec3(0, 1, 0)  //up
-			);
+		);
+		eyePos = glm::vec3(3, 0, 0);
 		Projection = glm::ortho(-orthoBoxSize, orthoBoxSize, -orthoBoxSize, orthoBoxSize, 0.0f, 100.0f);
 		break;
 	case '2':
@@ -377,7 +481,8 @@ GLvoid updateProjection(){
 			glm::vec3(0, 3, 0), //eye
 			glm::vec3(0, 0, 0), //center
 			glm::vec3(1, 0, 0)  //up
-			);
+		);
+		eyePos = glm::vec3(0, 3, 0);
 		Projection = glm::ortho(-orthoBoxSize, orthoBoxSize, -orthoBoxSize, orthoBoxSize, 0.0f, 100.0f);
 		break;
 	case '3':
@@ -385,7 +490,8 @@ GLvoid updateProjection(){
 			glm::vec3(0, 0, 3), //eye
 			glm::vec3(0, 0, 0), //center
 			glm::vec3(0, 1, 0)  //up
-			);
+		);
+		eyePos = glm::vec3(0, 0, 3);
 		Projection = glm::ortho(-orthoBoxSize, orthoBoxSize, -orthoBoxSize, orthoBoxSize, 0.0f, 100.0f);
 		break;
 	case '4':
@@ -393,14 +499,15 @@ GLvoid updateProjection(){
 			glm::vec3(3, 3, 3), //eye
 			glm::vec3(0, 0, 0), //center
 			glm::vec3(0, 1, 0)  //up
-			);
+		);
+		eyePos = glm::vec3(3, 3, 3);
 		Projection = glm::perspective(glm::radians(perspFOV), (GLfloat)wWidth / (GLfloat)wHeight, 0.1f, 100.0f);
 		break;
 	}
 }
 
-GLvoid updateProjectionZoom(){
-	switch (currentView){
+GLvoid updateProjectionZoom() {
+	switch (currentView) {
 	case '1':
 	case '2':
 	case '3':
@@ -456,7 +563,7 @@ GLvoid keyboard(GLubyte key, GLint x, GLint y)
 		generateFaces();
 		break;
 	case 'a':
-		if (curvepoints > 3){
+		if (curvepoints > 3) {
 			--curvepoints;
 		}
 		generateFullRevolutionSolid();
@@ -468,7 +575,7 @@ GLvoid keyboard(GLubyte key, GLint x, GLint y)
 		updateTitle();
 		break;
 	case ',':
-		if (revolutionSteps > 3){
+		if (revolutionSteps > 3) {
 			--revolutionSteps;
 		}
 		generateFullRevolutionSolid();
@@ -515,7 +622,7 @@ GLvoid reshape(GLint x, GLint y)
 	glutPostRedisplay();
 }
 
-GLvoid mouseHandler(GLint button, GLint state, GLint x, GLint y){
+GLvoid mouseHandler(GLint button, GLint state, GLint x, GLint y) {
 	GLint viewport[4];
 	GLdouble modelview[16];
 	GLdouble projection[16];
@@ -531,10 +638,10 @@ GLvoid mouseHandler(GLint button, GLint state, GLint x, GLint y){
 	glGetIntegerv(GL_VIEWPORT, viewport);
 	gluUnProject(winX, winY, winZ, modelview, projection, viewport, &posX, &posY, &posZ);
 
-	if (button == GLUT_LEFT_BUTTON){
-		if (winX <= wWidth / 2){
-			if (state == GLUT_UP && !isDragging){
-				controlPoints.push_back({ (GLfloat)posX, (GLfloat)posY, (GLfloat)posZ });
+	if (button == GLUT_LEFT_BUTTON) {
+		if (winX <= wWidth / 2) {
+			if (state == GLUT_UP && !isDragging) {
+				controlPoints.push_back({ (GLfloat)posX, (GLfloat)posY, (GLfloat)0 });
 				controlPointsColors.push_back({ 1, 1, 1, 1.0f });
 				initControlPointBufferData();
 
@@ -545,7 +652,7 @@ GLvoid mouseHandler(GLint button, GLint state, GLint x, GLint y){
 				isDragging = false;
 			}
 		}
-		else{
+		else {
 			xOrigin = x;
 			yOrigin = y;
 			isDragging = true;
@@ -556,18 +663,18 @@ GLvoid mouseHandler(GLint button, GLint state, GLint x, GLint y){
 			isDragging = false;
 		}
 	}
-	else if (GLUT_RIGHT_BUTTON){
+	else if (GLUT_RIGHT_BUTTON) {
 		auto heldPointIterator = std::find_if(controlPoints.begin(), controlPoints.end(), [posX, posY](Point a)->bool { return abs(a.x - posX) < 0.03 && abs(a.y - posY) < 0.03; });
-		if (winX <= wWidth / 2){
-			if (state == GLUT_DOWN){
-				if (controlPoints.end() != heldPointIterator){
+		if (winX <= wWidth / 2) {
+			if (state == GLUT_DOWN) {
+				if (controlPoints.end() != heldPointIterator) {
 					heldPoint = &*heldPointIterator;
 					printf("Point Held: %lf %lf\n", (*heldPoint).x, (*heldPoint).y);
 				}
 			}
-			else if (state == GLUT_UP){
-				if (glutGetModifiers() & GLUT_ACTIVE_SHIFT){
-					if (controlPoints.end() != heldPointIterator && (controlPoints.begin() != controlPoints.end())){
+			else if (state == GLUT_UP) {
+				if (glutGetModifiers() & GLUT_ACTIVE_SHIFT) {
+					if (controlPoints.end() != heldPointIterator && (controlPoints.begin() != controlPoints.end())) {
 						controlPoints.erase(heldPointIterator);
 						initControlPointBufferData();
 					}
@@ -589,6 +696,8 @@ void mouseMove(GLint x, GLint y) {
 
 		glm::vec3 xRotation = glm::vec3(glm::vec4(0.0, 1.0, 0.0, 1.0)*View);
 		View = glm::rotate(View, glm::radians(deltaAngleX), xRotation);
+		glm::mat4 viewInv = glm::inverse(View);
+		eyePos = glm::vec3(viewInv[3][0], viewInv[3][1], viewInv[3][2]);
 	}
 
 	if (yOrigin >= 0) {
@@ -598,9 +707,11 @@ void mouseMove(GLint x, GLint y) {
 
 		glm::vec3 yRotation = glm::vec3(glm::vec4(1.0, 0.0, 0.0, 1.0)*View);
 		View = glm::rotate(View, glm::radians(deltaAngleY), yRotation);
+		glm::mat4 viewInv = glm::inverse(View);
+		eyePos = glm::vec3(viewInv[3][0], viewInv[3][1], viewInv[3][2]);
 	}
 
-	if (heldPoint != NULL){
+	if (heldPoint != NULL) {
 		GLint viewport[4];
 		GLdouble modelview[16];
 		GLdouble projection[16];
@@ -618,7 +729,7 @@ void mouseMove(GLint x, GLint y) {
 
 		(*heldPoint).x = (GLfloat)posX;
 		(*heldPoint).y = (GLfloat)posY;
-		(*heldPoint).z = (GLfloat)posY;
+		(*heldPoint).z = (GLfloat)0;
 		initControlPointBufferData();
 	}
 }
@@ -656,7 +767,8 @@ GLint main(GLint argc, GLchar **argv)
 		glm::vec3(3, 3, 3), //eye
 		glm::vec3(0, 0, 0), //center
 		glm::vec3(0, 1, 0)  //up
-		);
+	);
+	eyePos = glm::vec3(3, 3, 3);
 	Projection = glm::perspective(glm::radians(perspFOV), (GLfloat)wWidth / (GLfloat)wHeight, 0.1f, 100.0f);
 
 #if defined(__linux__)
@@ -669,7 +781,8 @@ GLint main(GLint argc, GLchar **argv)
 	}
 
 	glGenVertexArrays(1, VertexArrayIDs);
-	glGenBuffers(7, vertexbuffers);
+	glGenBuffers(8, vertexbuffers);
+	glGenTextures(1,textureBuffers);
 
 	initShaders();
 

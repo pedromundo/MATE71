@@ -159,13 +159,13 @@ void rotatePoints(GLint steps) {
 				{
 				default:
 				case 'x':
-					rotation = glm::rotate(Model, (float)glm::radians(rotationAngle), glm::vec3(1, 0, 0));
+					rotation = glm::rotate(Model, (GLfloat)glm::radians(rotationAngle), glm::vec3(1, 0, 0));
 					break;
 				case 'y':
-					rotation = glm::rotate(Model, (float)glm::radians(rotationAngle), glm::vec3(0, 1, 0));
+					rotation = glm::rotate(Model, (GLfloat)glm::radians(rotationAngle), glm::vec3(0, 1, 0));
 					break;
 				case 'z':
-					rotation = glm::rotate(Model, (float)glm::radians(rotationAngle), glm::vec3(0, 0, 1));
+					rotation = glm::rotate(Model, (GLfloat)glm::radians(rotationAngle), glm::vec3(0, 0, 1));
 					break;
 				}
 
@@ -186,7 +186,7 @@ void rotatePoints(GLint steps) {
 
 inline void pushNormal(GLint i, GLint gridSize, GLint columnSize) {
 	//Verificar se ele é do começo ou do fim da linha
-	int direita = i + columnSize, esquerda = i - columnSize;
+	GLint direita = i + columnSize, esquerda = i - columnSize;
 	if (direita > gridSize - 1) {
 		direita = direita - gridSize;
 	}
@@ -196,7 +196,7 @@ inline void pushNormal(GLint i, GLint gridSize, GLint columnSize) {
 	}
 
 	if (i % columnSize == 0) { //Primeira linha
-		int iA = i, iB = direita + 1, iC = direita, iD = i + 1, iE = esquerda;
+		GLint iA = i, iB = direita + 1, iC = direita, iD = i + 1, iE = esquerda;
 		glm::vec3 A(points[iA].x, points[iA].y, points[iA].z),
 			B(points[iB].x, points[iB].y, points[iB].z),
 			C(points[iC].x, points[iC].y, points[iC].z),
@@ -218,7 +218,7 @@ inline void pushNormal(GLint i, GLint gridSize, GLint columnSize) {
 		return;
 	}
 	else if ((i + 1) % columnSize == 0) { //Ultima linha
-		int iA = i, iB = direita, iC = i - 1, iD = esquerda - 1, iE = esquerda;
+		GLint iA = i, iB = direita, iC = i - 1, iD = esquerda - 1, iE = esquerda;
 		glm::vec3 A(points[iA].x, points[iA].y, points[iA].z),
 			B(points[iB].x, points[iB].y, points[iB].z),
 			C(points[iC].x, points[iC].y, points[iC].z),
@@ -241,7 +241,7 @@ inline void pushNormal(GLint i, GLint gridSize, GLint columnSize) {
 
 	}
 	else { //Meio
-		int iA = i, iB = direita, iC = i - 1, iD = direita + 1, iE = i + 1, iF = esquerda, iG = esquerda - 1;
+		GLint iA = i, iB = direita, iC = i - 1, iD = direita + 1, iE = i + 1, iF = esquerda, iG = esquerda - 1;
 		glm::vec3 A(points[iA].x, points[iA].y, points[iA].z),
 			B(points[iB].x, points[iB].y, points[iB].z),
 			C(points[iC].x, points[iC].y, points[iC].z),
@@ -336,18 +336,18 @@ void generateFaces() {
 				}
 			}
 
-			int row = i % generatedcurvepoints;
-			int column = i / generatedcurvepoints;
+			GLint row = i % generatedcurvepoints;
+			GLint column = i / generatedcurvepoints;
 
-			double u;
-			if (column < generatedrevolutionsteps / 2) {
+			GLdouble u;
+			if (column < generatedrevolutionsteps / 2.0) {
 				u = glm::mix(0.0, 2.0, 1.0 / generatedrevolutionsteps * column);
 			}
 			else {
 				u = glm::mix(2.0, 0.0, 1.0 / generatedrevolutionsteps * column);
 			}
 
-			double v = 1.0 / generatedcurvepoints * row;
+			GLdouble v = 1.0 / generatedcurvepoints * row;
 
 			uvs.push_back(glm::vec2(u, v));
 		}
@@ -509,7 +509,7 @@ void generateCurve(GLint numPoints) {
 
 		for (GLint i = 1; i < numPoints - 1; ++i)
 		{
-			points.push_back(getBezierPoint3D(controlPoints, controlPoints.size(), i*(float)step));
+			points.push_back(getBezierPoint3D(controlPoints, controlPoints.size(), i*(GLfloat)step));
 			colors.push_back({ 1.0f, 1.0f, 1.0f, 1.0f });
 		}
 

@@ -4,7 +4,7 @@
 #include <GL/glut.h>
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
-#include <glm/gtc/type_ptr.hpp> 
+#include <glm/gtc/type_ptr.hpp>
 #include <SOIL.h>
 #include <stdio.h>
 #include <math.h>
@@ -18,69 +18,73 @@
 GLvoid reshape(GLint x, GLint y);
 
 //Shader Program Handles
-GLuint basicShader, GUIShader, axisShader;
+GLuint BasicShader, GUIShader, AxisShader;
 //Window Dimensions
-GLuint wWidth = 1280, wHeight = 480;
-//Data Dimensions
-GLuint dWidth = 1280, dHeight = 480;
+GLuint WWidth = 1280, WHeight = 480;
 //Handlers for the VBO and FBOs
-GLuint VertexArrayIDs[1], vertexbuffers[9], textureBuffers[1];
+GLuint VertexArrayIDs[1], VertexBuffers[9], TextureBuffers[1];
 //Control curve and revolution control variables
-GLuint generatedcurvepoints, generatedrevolutionsteps, curvepoints = 16, revolutionSteps = 36;
+GLuint GeneratedCurvePoints, GeneratedRevolutionSteps, CurvePoints = 32, RevolutionSteps = 64;
 //Revolution rotation axis
-GLchar rotationAxis = 'y';
+GLchar RotationAxis = 'y';
 //OpenGL rendering mode
-GLenum viewMode = GL_TRIANGLES;
+GLenum ViewMode = GL_TRIANGLES;
 //MVP Matrices
 glm::mat4 Projection, View, Model;
 
 //Camera Zoom Variables
-GLfloat orthoBoxSize = 3.0f, perspFOV = 45.0f;
-GLchar currentView = '4';
+GLfloat OrthoBoxSize = 1.5f, PerspFOV = 25.0f;
+GLchar CurrentView = '4';
 
 //Camera Movement variables
-GLfloat deltaAngleX = 0.0f, deltaAngleY = 0.0f;
-GLint xOrigin = -1, yOrigin = -1;
-GLboolean isDragging = false;
+GLfloat DeltaAngleX = 0.0f, DeltaAngleY = 0.0f;
+GLint XOrigin = -1, YOrigin = -1;
+GLboolean IsDragging = false;
 
 //Buffer data vectors
-std::vector<Point> controlPoints;
-std::vector<Color> controlPointsColors;
-std::vector<Point> points;
-std::vector<Point> normals;
-std::vector<Color> colors;
-std::vector<glm::vec2> uvs;
-std::vector<GLuint> faces;
+std::vector<Point> ControlPoints;
+std::vector<Point> Points;
+std::vector<Point> Normals;
+std::vector<Color> Colors;
+std::vector<glm::vec2> UVs;
+std::vector<GLuint> Faces;
 
-glm::vec3 lightPos(3);
-glm::vec3 eyePos(3);
+//Lighting variables
+glm::vec3 LightPos(3);
+glm::vec3 EyePos(3);
+GLfloat SpecularStrength = 1.0f;
+GLint SpecularCoefficient = 128;
 
-Point* heldPoint;
-GLint wTex, hTex, cTex;
-GLubyte* texture;
+//Texture variables
+GLint WTex, HTex, CTex;
+GLubyte* Texture;
+
+Point* HeldPoint;
 
 GLvoid initControlPointBufferData() {
-	glBindBuffer(GL_ARRAY_BUFFER, vertexbuffers[2]);
-	glBufferData(GL_ARRAY_BUFFER, 3 * sizeof(GLfloat)*controlPoints.size(), controlPoints.data(), GL_STATIC_DRAW);
+	glBindBuffer(GL_ARRAY_BUFFER, VertexBuffers[2]);
+	glBufferData(GL_ARRAY_BUFFER, 3 * sizeof(GLfloat)*ControlPoints.size(), ControlPoints.data(), GL_STATIC_DRAW);
 
-	glBindBuffer(GL_ARRAY_BUFFER, vertexbuffers[3]);
-	glBufferData(GL_ARRAY_BUFFER, 4 * sizeof(GLfloat)*controlPointsColors.size(), controlPointsColors.data(), GL_STATIC_DRAW);
+	if (GeneratedCurvePoints) {
+		glBindBuffer(GL_ARRAY_BUFFER, VertexBuffers[3]);
+		glBufferData(GL_ARRAY_BUFFER, 3 * sizeof(GLfloat)*GeneratedCurvePoints, Points.data(), GL_STATIC_DRAW);
+	}
 
 	glBindBuffer(GL_ARRAY_BUFFER, 0);
 }
 
 GLvoid initBufferData() {
-	glBindBuffer(GL_ARRAY_BUFFER, vertexbuffers[0]);
-	glBufferData(GL_ARRAY_BUFFER, 3 * sizeof(GLfloat)*points.size(), points.data(), GL_STATIC_DRAW);
+	glBindBuffer(GL_ARRAY_BUFFER, VertexBuffers[0]);
+	glBufferData(GL_ARRAY_BUFFER, 3 * sizeof(GLfloat)*Points.size(), Points.data(), GL_STATIC_DRAW);
 
-	glBindBuffer(GL_ARRAY_BUFFER, vertexbuffers[1]);
-	glBufferData(GL_ARRAY_BUFFER, 4 * sizeof(GLfloat)*colors.size(), colors.data(), GL_STATIC_DRAW);
+	glBindBuffer(GL_ARRAY_BUFFER, VertexBuffers[1]);
+	glBufferData(GL_ARRAY_BUFFER, 4 * sizeof(GLfloat)*Colors.size(), Colors.data(), GL_STATIC_DRAW);
 
-	glBindBuffer(GL_ARRAY_BUFFER, vertexbuffers[7]);
-	glBufferData(GL_ARRAY_BUFFER, 3 * sizeof(GLfloat)*normals.size(), normals.data(), GL_STATIC_DRAW);
+	glBindBuffer(GL_ARRAY_BUFFER, VertexBuffers[7]);
+	glBufferData(GL_ARRAY_BUFFER, 3 * sizeof(GLfloat)*Normals.size(), Normals.data(), GL_STATIC_DRAW);
 
-	glBindBuffer(GL_ARRAY_BUFFER, vertexbuffers[8]);
-	glBufferData(GL_ARRAY_BUFFER, 2 * sizeof(GLfloat)*uvs.size(), uvs.data(), GL_STATIC_DRAW);
+	glBindBuffer(GL_ARRAY_BUFFER, VertexBuffers[8]);
+	glBufferData(GL_ARRAY_BUFFER, 2 * sizeof(GLfloat)*UVs.size(), UVs.data(), GL_STATIC_DRAW);
 
 	glBindBuffer(GL_ARRAY_BUFFER, 0);
 }
@@ -92,7 +96,7 @@ GLvoid initReferenceBufferData() {
 	axisPoints[2] = { 0.0, 2.0, 0.0 };
 	axisPoints[3] = { 0.0, 0.0, 2.0 };
 
-	glBindBuffer(GL_ARRAY_BUFFER, vertexbuffers[5]);
+	glBindBuffer(GL_ARRAY_BUFFER, VertexBuffers[5]);
 	glBufferData(GL_ARRAY_BUFFER, 3 * sizeof(GLfloat) * 4, axisPoints.data(), GL_STATIC_DRAW);
 	glBindBuffer(GL_ARRAY_BUFFER, 0);
 
@@ -104,11 +108,22 @@ GLvoid initReferenceBufferData() {
 	lineIDs[4] = 0;
 	lineIDs[5] = 3;
 
-	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, vertexbuffers[6]);
+	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, VertexBuffers[6]);
 	glBufferData(GL_ELEMENT_ARRAY_BUFFER, 2 * sizeof(GLuint)*lineIDs.size(), lineIDs.data(), GL_STATIC_DRAW);
 	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
 }
 
+GLvoid initTextureData(char* filename) {
+	Texture = SOIL_load_image(filename, &WTex, &HTex, &CTex, SOIL_LOAD_RGB);
+	glActiveTexture(GL_TEXTURE0);
+	glBindTexture(GL_TEXTURE_2D, TextureBuffers[0]);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, WTex, HTex, 0, GL_RGB, GL_UNSIGNED_BYTE, Texture);
+	glUniform1i(glGetUniformLocation(BasicShader, "tex"), 0);
+}
 
 Point getBezierPoint3D(std::vector<Point> points, GLint numPoints, GLfloat t) {
 	GLint i = numPoints - 1;
@@ -122,40 +137,40 @@ Point getBezierPoint3D(std::vector<Point> points, GLint numPoints, GLfloat t) {
 }
 
 GLvoid resetRevolution() {
-	if (points.size() > generatedcurvepoints) {
-		points.erase(points.begin() + generatedcurvepoints, points.end());
-		colors.erase(colors.begin() + generatedcurvepoints, colors.end());
-		faces.clear();
+	if (Points.size() > GeneratedCurvePoints) {
+		Points.erase(Points.begin() + GeneratedCurvePoints, Points.end());
+		Colors.erase(Colors.begin() + GeneratedCurvePoints, Colors.end());
+		Faces.clear();
 		glutSwapBuffers();
 		glutPostRedisplay();
 	}
 }
 
 GLvoid resetDrawing() {
-	points.clear();
-	normals.clear();
-	uvs.clear();
-	colors.clear();
-	faces.clear();
+	Points.clear();
+	Normals.clear();
+	UVs.clear();
+	Colors.clear();
+	Faces.clear();
 	glutSwapBuffers();
 	glutPostRedisplay();
 }
 
 void rotatePoints(GLint steps) {
-	if (!points.empty()) {
+	if (!Points.empty()) {
 		resetRevolution();
 		std::vector<std::vector<Point>>slices(steps);
 		GLdouble step = 360.0 / (steps);
 
 		for (GLint currStep = 1; currStep < steps; ++currStep)
 		{
-			for (auto pt : points) {
+			for (auto pt : Points) {
 				glm::vec4 point = glm::vec4(pt.x, pt.y, pt.z, 1);
 				glm::mat4 rotation;
 
 				auto rotationAngle = glm::ceil(step*currStep);
 
-				switch (rotationAxis)
+				switch (RotationAxis)
 				{
 				default:
 				case 'x':
@@ -171,14 +186,14 @@ void rotatePoints(GLint steps) {
 
 				glm::vec4 rotatedPoint = rotation * point;
 				slices[currStep].push_back({ rotatedPoint.x, rotatedPoint.y, rotatedPoint.z });
-				colors.push_back({ abs(rotatedPoint.x), abs(rotatedPoint.y), abs(rotatedPoint.z), 1.0f });
+				Colors.push_back({ abs(rotatedPoint.x), abs(rotatedPoint.y), abs(rotatedPoint.z), 1.0f });
 			}
 		}
 
-		generatedrevolutionsteps = slices.size();
+		GeneratedRevolutionSteps = slices.size();
 
 		for (auto slice : slices) {
-			points.insert(points.end(), slice.begin(), slice.end());
+			Points.insert(Points.end(), slice.begin(), slice.end());
 		}
 		initBufferData();
 	}
@@ -197,11 +212,11 @@ inline void pushNormal(GLint i, GLint gridSize, GLint columnSize) {
 
 	if (i % columnSize == 0) { //Primeira linha
 		GLint iA = i, iB = direita + 1, iC = direita, iD = i + 1, iE = esquerda;
-		glm::vec3 A(points[iA].x, points[iA].y, points[iA].z),
-			B(points[iB].x, points[iB].y, points[iB].z),
-			C(points[iC].x, points[iC].y, points[iC].z),
-			D(points[iD].x, points[iD].y, points[iD].z),
-			E(points[iE].x, points[iE].y, points[iE].z);
+		glm::vec3 A(Points[iA].x, Points[iA].y, Points[iA].z),
+			B(Points[iB].x, Points[iB].y, Points[iB].z),
+			C(Points[iC].x, Points[iC].y, Points[iC].z),
+			D(Points[iD].x, Points[iD].y, Points[iD].z),
+			E(Points[iE].x, Points[iE].y, Points[iE].z);
 
 		glm::vec3 normalDirectionABC = glm::cross((B - A), (C - A));
 		glm::vec3 normalABC = normalDirectionABC / (GLfloat)normalDirectionABC.length();
@@ -212,18 +227,18 @@ inline void pushNormal(GLint i, GLint gridSize, GLint columnSize) {
 		glm::vec3 normalDirectionAED = glm::cross((E - A), (D - A));
 		glm::vec3 normalAED = normalDirectionAED / (GLfloat)normalDirectionAED.length();
 
-		glm::vec3 meanNormal = (normalABC + normalADB + normalAED) / 3.0f;
+		glm::vec3 meanNormal = (normalABC + normalADB + normalAED) / 1.5f;
 
-		normals.push_back({ meanNormal.x, meanNormal.y, meanNormal.z });
+		Normals.push_back({ meanNormal.x, meanNormal.y, meanNormal.z });
 		return;
 	}
 	else if ((i + 1) % columnSize == 0) { //Ultima linha
 		GLint iA = i, iB = direita, iC = i - 1, iD = esquerda - 1, iE = esquerda;
-		glm::vec3 A(points[iA].x, points[iA].y, points[iA].z),
-			B(points[iB].x, points[iB].y, points[iB].z),
-			C(points[iC].x, points[iC].y, points[iC].z),
-			D(points[iD].x, points[iD].y, points[iD].z),
-			E(points[iE].x, points[iE].y, points[iE].z);
+		glm::vec3 A(Points[iA].x, Points[iA].y, Points[iA].z),
+			B(Points[iB].x, Points[iB].y, Points[iB].z),
+			C(Points[iC].x, Points[iC].y, Points[iC].z),
+			D(Points[iD].x, Points[iD].y, Points[iD].z),
+			E(Points[iE].x, Points[iE].y, Points[iE].z);
 
 		glm::vec3 normalDirectionABC = glm::cross((B - A), (C - A));
 		glm::vec3 normalABC = normalDirectionABC / (GLfloat)normalDirectionABC.length();
@@ -234,21 +249,20 @@ inline void pushNormal(GLint i, GLint gridSize, GLint columnSize) {
 		glm::vec3 normalDirectionADE = glm::cross((C - A), (D - A));
 		glm::vec3 normalADE = normalDirectionADE / (GLfloat)normalDirectionADE.length();
 
-		glm::vec3 meanNormal = (normalABC + normalACD + normalADE) / 3.0f;
+		glm::vec3 meanNormal = (normalABC + normalACD + normalADE) / 1.5f;
 
-		normals.push_back({ meanNormal.x, meanNormal.y, meanNormal.z });
+		Normals.push_back({ meanNormal.x, meanNormal.y, meanNormal.z });
 		return;
-
 	}
 	else { //Meio
 		GLint iA = i, iB = direita, iC = i - 1, iD = direita + 1, iE = i + 1, iF = esquerda, iG = esquerda - 1;
-		glm::vec3 A(points[iA].x, points[iA].y, points[iA].z),
-			B(points[iB].x, points[iB].y, points[iB].z),
-			C(points[iC].x, points[iC].y, points[iC].z),
-			D(points[iD].x, points[iD].y, points[iD].z),
-			E(points[iE].x, points[iE].y, points[iE].z),
-			F(points[iF].x, points[iF].y, points[iF].z),
-			G(points[iG].x, points[iG].y, points[iG].z);
+		glm::vec3 A(Points[iA].x, Points[iA].y, Points[iA].z),
+			B(Points[iB].x, Points[iB].y, Points[iB].z),
+			C(Points[iC].x, Points[iC].y, Points[iC].z),
+			D(Points[iD].x, Points[iD].y, Points[iD].z),
+			E(Points[iE].x, Points[iE].y, Points[iE].z),
+			F(Points[iF].x, Points[iF].y, Points[iF].z),
+			G(Points[iG].x, Points[iG].y, Points[iG].z);
 
 		glm::vec3 normalDirectionABC = glm::cross((B - A), (C - A));
 		glm::vec3 normalABC = normalDirectionABC / (GLfloat)normalDirectionABC.length();
@@ -270,254 +284,124 @@ inline void pushNormal(GLint i, GLint gridSize, GLint columnSize) {
 
 		glm::vec3 meanNormal = (normalABC + normalADB + normalAED + normalAFE + normalACG + normalAGF) / 6.0f;
 
-		normals.push_back({ meanNormal.x, meanNormal.y, meanNormal.z });
+		Normals.push_back({ meanNormal.x, meanNormal.y, meanNormal.z });
 		return;
 	}
 }
 
 void generateFaces() {
-	if (points.size() > generatedcurvepoints) {
-		faces.clear();
-		normals.clear();
-		uvs.clear();
-		GLint numpoints = generatedrevolutionsteps * generatedcurvepoints;
-		GLint lastlineindex = numpoints - generatedcurvepoints;
+	if (Points.size() > GeneratedCurvePoints) {
+		Faces.clear();
+		Normals.clear();
+		UVs.clear();
+		GLint numpoints = GeneratedRevolutionSteps * GeneratedCurvePoints;
+		GLint lastlineindex = numpoints - GeneratedCurvePoints;
 		for (GLint i = 0; i < numpoints; ++i) {
 			if (i < lastlineindex) {
-				if (i % generatedcurvepoints == 0) {
-					faces.push_back(i);
-					faces.push_back(i + generatedcurvepoints + 1);
-					faces.push_back(i + generatedcurvepoints);
+				if (i % GeneratedCurvePoints == 0) {
+					Faces.push_back(i);
+					Faces.push_back(i + GeneratedCurvePoints + 1);
+					Faces.push_back(i + GeneratedCurvePoints);
 
-					pushNormal(i, numpoints, generatedcurvepoints);
+					pushNormal(i, numpoints, GeneratedCurvePoints);
 				}
-				else if ((i + 1) % generatedcurvepoints == 0) {
-					faces.push_back(i);
-					faces.push_back(i + generatedcurvepoints);
-					faces.push_back(i - 1);
+				else if ((i + 1) % GeneratedCurvePoints == 0) {
+					Faces.push_back(i);
+					Faces.push_back(i + GeneratedCurvePoints);
+					Faces.push_back(i - 1);
 
-					pushNormal(i, numpoints, generatedcurvepoints);
+					pushNormal(i, numpoints, GeneratedCurvePoints);
 				}
 				else {
-					faces.push_back(i);
-					faces.push_back(i + generatedcurvepoints + 1);
-					faces.push_back(i + generatedcurvepoints);
-					faces.push_back(i);
-					faces.push_back(i + generatedcurvepoints);
-					faces.push_back(i - 1);
+					Faces.push_back(i);
+					Faces.push_back(i + GeneratedCurvePoints + 1);
+					Faces.push_back(i + GeneratedCurvePoints);
+					Faces.push_back(i);
+					Faces.push_back(i + GeneratedCurvePoints);
+					Faces.push_back(i - 1);
 
-					pushNormal(i, numpoints, generatedcurvepoints);
+					pushNormal(i, numpoints, GeneratedCurvePoints);
 				}
 			}
 			else {
-				if (i % generatedcurvepoints == 0) {
-					faces.push_back(i);
-					faces.push_back(i % lastlineindex + 1);
-					faces.push_back(i % lastlineindex);
+				if (i % GeneratedCurvePoints == 0) {
+					Faces.push_back(i);
+					Faces.push_back(i % lastlineindex + 1);
+					Faces.push_back(i % lastlineindex);
 
-					pushNormal(i, numpoints, generatedcurvepoints);
+					pushNormal(i, numpoints, GeneratedCurvePoints);
 				}
-				else if ((i + 1) % generatedcurvepoints == 0) {
-					faces.push_back(i);
-					faces.push_back(i % lastlineindex);
-					faces.push_back(i - 1);
+				else if ((i + 1) % GeneratedCurvePoints == 0) {
+					Faces.push_back(i);
+					Faces.push_back(i % lastlineindex);
+					Faces.push_back(i - 1);
 
-					pushNormal(i, numpoints, generatedcurvepoints);
+					pushNormal(i, numpoints, GeneratedCurvePoints);
 				}
 				else {
-					faces.push_back(i);
-					faces.push_back(i % lastlineindex + 1);
-					faces.push_back(i % lastlineindex);
-					faces.push_back(i);
-					faces.push_back(i % lastlineindex);
-					faces.push_back(i - 1);
+					Faces.push_back(i);
+					Faces.push_back(i % lastlineindex + 1);
+					Faces.push_back(i % lastlineindex);
+					Faces.push_back(i);
+					Faces.push_back(i % lastlineindex);
+					Faces.push_back(i - 1);
 
-					pushNormal(i, numpoints, generatedcurvepoints);
+					pushNormal(i, numpoints, GeneratedCurvePoints);
 				}
 			}
 
-			GLint row = i % generatedcurvepoints;
-			GLint column = i / generatedcurvepoints;
+			GLint row = i % GeneratedCurvePoints;
+			GLint column = i / GeneratedCurvePoints;
 
-			GLdouble u;
-			if (column < generatedrevolutionsteps / 2.0) {
-				u = glm::mix(0.0, 2.0, 1.0 / generatedrevolutionsteps * column);
+			GLfloat u;
+			if (column < GeneratedRevolutionSteps / 2.0f) {
+				u = glm::mix(0.0f, 2.0f, 1.0f / GeneratedRevolutionSteps * column);
 			}
 			else {
-				u = glm::mix(2.0, 0.0, 1.0 / generatedrevolutionsteps * column);
+				if (column == GeneratedRevolutionSteps - 1) {
+					auto hack = 1;
+					u = glm::mix(0.0f, 2.0f, 1.0f / GeneratedRevolutionSteps * hack);
+				}
+				else {
+					u = glm::mix(2.0f, 0.0f, 1.0f / GeneratedRevolutionSteps * column);
+				}
 			}
 
-			GLdouble v = 1.0 / generatedcurvepoints * row;
+			GLfloat v = (1.0f / (GeneratedCurvePoints - 1)) * row;
 
-			uvs.push_back(glm::vec2(u, v));
+			UVs.push_back(glm::vec2(u, v));
 		}
 
-		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, vertexbuffers[4]);
-		glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(GLuint)*faces.size(), faces.data(), GL_STATIC_DRAW);
+		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, VertexBuffers[4]);
+		glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(GLuint)*Faces.size(), Faces.data(), GL_STATIC_DRAW);
 
-		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, vertexbuffers[7]);
-		glBufferData(GL_ELEMENT_ARRAY_BUFFER, 3 * sizeof(GLfloat)*normals.size(), normals.data(), GL_STATIC_DRAW);
+		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, VertexBuffers[7]);
+		glBufferData(GL_ELEMENT_ARRAY_BUFFER, 3 * sizeof(GLfloat)*Normals.size(), Normals.data(), GL_STATIC_DRAW);
 
-		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, vertexbuffers[8]);
-		glBufferData(GL_ELEMENT_ARRAY_BUFFER, 2 * sizeof(GLfloat)*uvs.size(), uvs.data(), GL_STATIC_DRAW);
+		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, VertexBuffers[8]);
+		glBufferData(GL_ELEMENT_ARRAY_BUFFER, 2 * sizeof(GLfloat)*UVs.size(), UVs.data(), GL_STATIC_DRAW);
 		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
 	}
 }
 
-//void generateFaces() {
-//	if (points.size() > generatedcurvepoints) {
-//		faces.clear();
-//		normals.clear();
-//		uvs.clear();
-//		GLint numpoints = generatedrevolutionsteps * generatedcurvepoints;
-//		GLint lastlineindex = numpoints - generatedcurvepoints;
-//		for (GLint i = 0; i < numpoints; ++i) {
-//			if (i < lastlineindex) {
-//				if (i % generatedcurvepoints == 0) {
-//					faces.push_back(i);
-//					faces.push_back(i + generatedcurvepoints + 1);
-//					faces.push_back(i + generatedcurvepoints);
-//
-//					glm::vec3 A(points[i].x, points[i].y, points[i].z),
-//						B(points[i + generatedcurvepoints + 1].x, points[i + generatedcurvepoints + 1].y, points[i + generatedcurvepoints + 1].z),
-//						C(points[i + generatedcurvepoints].x, points[i + generatedcurvepoints].y, points[i + generatedcurvepoints].z);
-//
-//
-//					glm::vec3 normalDirection = glm::cross((B - A), (C - A));
-//					glm::vec3 normal = normalDirection / (GLfloat)normalDirection.length();
-//
-//					normals.push_back({ normal.x,normal.y,normal.z });
-//				}
-//				else if ((i + 1) % generatedcurvepoints == 0) {
-//					faces.push_back(i);
-//					faces.push_back(i + generatedcurvepoints);
-//					faces.push_back(i - 1);
-//
-//					glm::vec3 A(points[i].x, points[i].y, points[i].z),
-//						B(points[i + generatedcurvepoints].x, points[i + generatedcurvepoints].y, points[i + generatedcurvepoints].z),
-//						C(points[i - 1].x, points[i - 1].y, points[i - 1].z);
-//
-//					glm::vec3 normalDirection = glm::cross((B - A), (C - A));
-//					glm::vec3 normal = normalDirection / (float)normalDirection.length();
-//
-//					normals.push_back({ normal.x,normal.y,normal.z });
-//				}
-//				else {
-//					faces.push_back(i);
-//					faces.push_back(i + generatedcurvepoints + 1);
-//					faces.push_back(i + generatedcurvepoints);
-//					faces.push_back(i);
-//					faces.push_back(i + generatedcurvepoints);
-//					faces.push_back(i - 1);
-//
-//					glm::vec3 A(points[i].x, points[i].y, points[i].z),
-//						B(points[i + generatedcurvepoints + 1].x, points[i + generatedcurvepoints + 1].y, points[i + generatedcurvepoints + 1].z),
-//						C(points[i + generatedcurvepoints].x, points[i + generatedcurvepoints].y, points[i + generatedcurvepoints].z),
-//						D(points[i - 1].x, points[i - 1].y, points[i - 1].z);
-//
-//					glm::vec3 normalOneDirection = glm::cross((B - A), (C - A));
-//					glm::vec3 normalOne = normalOneDirection / (float)normalOneDirection.length();
-//
-//					glm::vec3 normalTwoDirection = glm::cross((C - A), (D - A));
-//					glm::vec3 NormalTwo = normalTwoDirection / (float)normalTwoDirection.length();
-//
-//					glm::vec3 normalFinal = glm::mix(normalOne, NormalTwo, 0.5);
-//					normals.push_back({ normalFinal.x,normalFinal.y,normalFinal.z });
-//				}
-//			}
-//			else {
-//				if (i % generatedcurvepoints == 0) {
-//					faces.push_back(i);
-//					faces.push_back(i % lastlineindex + 1);
-//					faces.push_back(i % lastlineindex);
-//
-//					glm::vec3 A(points[i].x, points[i].y, points[i].z),
-//						B(points[i % lastlineindex + 1].x, points[i % lastlineindex + 1].y, points[i % lastlineindex + 1].z),
-//						C(points[i % lastlineindex].x, points[i % lastlineindex].y, points[i % lastlineindex].z);
-//
-//
-//					glm::vec3 normalDirection = glm::cross((B - A), (C - A));
-//					glm::vec3 normal = normalDirection / (float)normalDirection.length();
-//
-//					normals.push_back({ normal.x,normal.y,normal.z });
-//				}
-//				else if ((i + 1) % generatedcurvepoints == 0) {
-//					faces.push_back(i);
-//					faces.push_back(i % lastlineindex);
-//					faces.push_back(i - 1);
-//
-//					glm::vec3 A(points[i].x, points[i].y, points[i].z),
-//						B(points[i % lastlineindex].x, points[i % lastlineindex].y, points[i % lastlineindex].z),
-//						C(points[i - 1].x, points[i - 1].y, points[i - 1].z);
-//
-//					glm::vec3 normalDirection = glm::cross((B - A), (C - A));
-//					glm::vec3 normal = normalDirection / (float)normalDirection.length();
-//
-//					normals.push_back({ normal.x,normal.y,normal.z });
-//				}
-//				else {
-//					faces.push_back(i);
-//					faces.push_back(i % lastlineindex + 1);
-//					faces.push_back(i % lastlineindex);
-//					faces.push_back(i);
-//					faces.push_back(i % lastlineindex);
-//					faces.push_back(i - 1);
-//
-//					glm::vec3 A(points[i].x, points[i].y, points[i].z),
-//						B(points[i % lastlineindex + 1].x, points[i % lastlineindex + 1].y, points[i % lastlineindex + 1].z),
-//						C(points[i % lastlineindex].x, points[i % lastlineindex].y, points[i % lastlineindex].z),
-//						D(points[i - 1].x, points[i - 1].y, points[i - 1].z);
-//
-//					glm::vec3 normalOneDirection = glm::cross((B - A), (C - A));
-//					glm::vec3 normalOne = normalOneDirection / (float)normalOneDirection.length();
-//
-//					glm::vec3 normalTwoDirection = glm::cross((C - A), (D - A));
-//					glm::vec3 NormalTwo = normalTwoDirection / (float)normalTwoDirection.length();
-//
-//					glm::vec3 normalFinal = glm::mix(normalOne, NormalTwo, 0.5);
-//					normals.push_back({ normalFinal.x,normalFinal.y,normalFinal.z });
-//				}
-//			}
-//
-//			int row = i % generatedcurvepoints;
-//			int column = i / generatedcurvepoints;
-//
-//			double u = 1.0 / generatedrevolutionsteps * column;
-//			double v = 1.0 / generatedcurvepoints * row;
-//
-//			uvs.push_back(glm::vec2(u, v));
-//		}
-//
-//		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, vertexbuffers[4]);
-//		glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(GLuint)*faces.size(), faces.data(), GL_STATIC_DRAW);
-//
-//		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, vertexbuffers[7]);
-//		glBufferData(GL_ELEMENT_ARRAY_BUFFER, 3 * sizeof(GLfloat)*normals.size(), normals.data(), GL_STATIC_DRAW);
-//
-//		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, vertexbuffers[8]);
-//		glBufferData(GL_ELEMENT_ARRAY_BUFFER, 2 * sizeof(GLfloat)*uvs.size(), uvs.data(), GL_STATIC_DRAW);
-//		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
-//	}
-//}
-
 void generateCurve(GLint numPoints) {
 	resetDrawing();
-	if (!controlPoints.empty()) {
+	if (!ControlPoints.empty()) {
 		GLdouble step = 1.0 / (numPoints - 1);
-		points.push_back(controlPoints.front());
-		colors.push_back({ 1.0f, 1.0f, 1.0f, 1.0f });
+		Points.push_back(ControlPoints.front());
+		Colors.push_back({ 1.0f, 1.0f, 1.0f, 1.0f });
 
 		for (GLint i = 1; i < numPoints - 1; ++i)
 		{
-			points.push_back(getBezierPoint3D(controlPoints, controlPoints.size(), i*(GLfloat)step));
-			colors.push_back({ 1.0f, 1.0f, 1.0f, 1.0f });
+			Points.push_back(getBezierPoint3D(ControlPoints, ControlPoints.size(), i*(GLfloat)step));
+			Colors.push_back({ 1.0f, 1.0f, 1.0f, 1.0f });
 		}
 
-		points.push_back(controlPoints.back());
-		colors.push_back({ 1.0f, 1.0f, 1.0f, 1.0f });
-		normals.push_back({ 1.0f, 1.0f, 1.0f });
+		Points.push_back(ControlPoints.back());
+		Colors.push_back({ 1.0f, 1.0f, 1.0f, 1.0f });
+		Normals.push_back({ 1.0f, 1.0f, 1.0f });
 
-		generatedcurvepoints = points.size();
+		GeneratedCurvePoints = Points.size();
 
 		initBufferData();
 	}
@@ -526,47 +410,49 @@ void generateCurve(GLint numPoints) {
 GLvoid shaderPlumbing() {
 	glPointSize(1);
 
-	//MODEL matrix
+	//Model matrix
 	glm::mat4 M = Model;
-	GLuint MId = glGetUniformLocation(basicShader, "M");
+	GLuint MId = glGetUniformLocation(BasicShader, "M");
 	glUniformMatrix4fv(MId, 1, GL_FALSE, glm::value_ptr(M));
 
 	//MVP matrix
 	glm::mat4 MVP = Projection * View * Model;
-	GLuint MVPId = glGetUniformLocation(basicShader, "MVP");
+	GLuint MVPId = glGetUniformLocation(BasicShader, "MVP");
 	glUniformMatrix4fv(MVPId, 1, GL_FALSE, glm::value_ptr(MVP));
 
-	//Lightpos vector	
-	GLuint lightPosID = glGetUniformLocation(basicShader, "lightPos_world");
-	glUniform3fv(lightPosID, 1, glm::value_ptr(lightPos));
+	//Lighting vectors
+	GLuint lightPosID = glGetUniformLocation(BasicShader, "lightPos_world");
+	glUniform3fv(lightPosID, 1, glm::value_ptr(LightPos));
+	GLuint eyePosID = glGetUniformLocation(BasicShader, "eyePos_world");
+	glUniform3fv(eyePosID, 1, glm::value_ptr(EyePos));
 
-	//Eyepos vector	
-	GLuint eyePosID = glGetUniformLocation(basicShader, "eyePos_world");
-	glUniform3fv(eyePosID, 1, glm::value_ptr(eyePos));
+	//Material lighting uniforms
+	GLuint specularStrengthID = glGetUniformLocation(BasicShader, "specularStrength");
+	glUniform1f(specularStrengthID, SpecularStrength);
+	GLuint specularCoefficientID = glGetUniformLocation(BasicShader, "specularCoefficient");
+	glUniform1i(specularCoefficientID, SpecularCoefficient);
 
 	//position data
-	//glBindVertexArray(VertexArrayIDs[0]);
-	glBindBuffer(GL_ARRAY_BUFFER, vertexbuffers[0]);
-	glEnableVertexAttribArray(glGetAttribLocation(basicShader, "aPosition_object"));
-	glVertexAttribPointer(glGetAttribLocation(basicShader, "aPosition_object"), 3, GL_FLOAT, GL_FALSE, 0, (GLvoid*)0);
+	glBindBuffer(GL_ARRAY_BUFFER, VertexBuffers[0]);
+	glEnableVertexAttribArray(glGetAttribLocation(BasicShader, "aPosition_object"));
+	glVertexAttribPointer(glGetAttribLocation(BasicShader, "aPosition_object"), 3, GL_FLOAT, GL_FALSE, 0, (GLvoid*)0);
 
-	//normal data	
-	glBindBuffer(GL_ARRAY_BUFFER, vertexbuffers[7]);
-	glEnableVertexAttribArray(glGetAttribLocation(basicShader, "aNormal_object"));
-	glVertexAttribPointer(glGetAttribLocation(basicShader, "aNormal_object"), 3, GL_FLOAT, GL_FALSE, 0, (GLvoid*)0);
+	//normal data
+	glBindBuffer(GL_ARRAY_BUFFER, VertexBuffers[7]);
+	glEnableVertexAttribArray(glGetAttribLocation(BasicShader, "aNormal_object"));
+	glVertexAttribPointer(glGetAttribLocation(BasicShader, "aNormal_object"), 3, GL_FLOAT, GL_FALSE, 0, (GLvoid*)0);
 
-	//uv data	
-	glBindBuffer(GL_ARRAY_BUFFER, vertexbuffers[8]);
-	glEnableVertexAttribArray(glGetAttribLocation(basicShader, "aUV"));
-	glVertexAttribPointer(glGetAttribLocation(basicShader, "aUV"), 2, GL_FLOAT, GL_FALSE, 0, (GLvoid*)0);
+	//uv data
+	glBindBuffer(GL_ARRAY_BUFFER, VertexBuffers[8]);
+	glEnableVertexAttribArray(glGetAttribLocation(BasicShader, "aUV"));
+	glVertexAttribPointer(glGetAttribLocation(BasicShader, "aUV"), 2, GL_FLOAT, GL_FALSE, 0, (GLvoid*)0);
 
 	//color data
-	glBindBuffer(GL_ARRAY_BUFFER, vertexbuffers[1]);
-	glEnableVertexAttribArray(glGetAttribLocation(basicShader, "aColor"));
-	glVertexAttribPointer(glGetAttribLocation(basicShader, "aColor"), 4, GL_FLOAT, GL_FALSE, 0, (GLvoid*)0);
+	glBindBuffer(GL_ARRAY_BUFFER, VertexBuffers[1]);
+	glEnableVertexAttribArray(glGetAttribLocation(BasicShader, "aColor"));
+	glVertexAttribPointer(glGetAttribLocation(BasicShader, "aColor"), 4, GL_FLOAT, GL_FALSE, 0, (GLvoid*)0);
 
 	glBindBuffer(GL_ARRAY_BUFFER, 0);
-
 }
 
 GLvoid shaderPlumbingAxis() {
@@ -574,39 +460,32 @@ GLvoid shaderPlumbingAxis() {
 
 	//MVP matrix
 	glm::mat4 MVP = Projection * View * Model;
-	GLuint MVPId = glGetUniformLocation(axisShader, "MVP");
+	GLuint MVPId = glGetUniformLocation(AxisShader, "MVP");
 	glUniformMatrix4fv(MVPId, 1, GL_FALSE, glm::value_ptr(MVP));
 
 	//position data
 	//glBindVertexArray(VertexArrayIDs[0]);
-	glBindBuffer(GL_ARRAY_BUFFER, vertexbuffers[5]);
-	glEnableVertexAttribArray(glGetAttribLocation(axisShader, "aPosition"));
-	glVertexAttribPointer(glGetAttribLocation(axisShader, "aPosition"), 3, GL_FLOAT, GL_FALSE, 0, (GLvoid*)0);
+	glBindBuffer(GL_ARRAY_BUFFER, VertexBuffers[5]);
+	glEnableVertexAttribArray(glGetAttribLocation(AxisShader, "aPosition"));
+	glVertexAttribPointer(glGetAttribLocation(AxisShader, "aPosition"), 3, GL_FLOAT, GL_FALSE, 0, (GLvoid*)0);
 	glBindBuffer(GL_ARRAY_BUFFER, 0);
-
 }
 
 GLvoid shaderPlumbingGUI() {
 	//Point size 1 looks like shit
-	glPointSize(5);
+	glPointSize(10);
 
 	//position data
-	//glBindVertexArray(VertexArrayIDs[0]);
-	glBindBuffer(GL_ARRAY_BUFFER, vertexbuffers[2]);
+	glBindBuffer(GL_ARRAY_BUFFER, VertexBuffers[2]);
 	glEnableVertexAttribArray(glGetAttribLocation(GUIShader, "aPosition"));
 	glVertexAttribPointer(glGetAttribLocation(GUIShader, "aPosition"), 3, GL_FLOAT, GL_FALSE, 0, (GLvoid*)0);
-
-	//color data
-	glBindBuffer(GL_ARRAY_BUFFER, vertexbuffers[3]);
-	glEnableVertexAttribArray(glGetAttribLocation(GUIShader, "aColor"));
-	glVertexAttribPointer(glGetAttribLocation(GUIShader, "aColor"), 4, GL_FLOAT, GL_FALSE, 0, (GLvoid*)0);
 
 	glBindBuffer(GL_ARRAY_BUFFER, 0);
 }
 GLvoid updateTitle() {
 	stringstream ss;
 	string target;
-	ss << "Assignment 1 - Revolution Solids - Current Revolution Axis: [" << rotationAxis << "]" << " - Current Curve Complexity:" << "[" << curvepoints << "] - Revolution Steps:" << "[" << revolutionSteps << "]";
+	ss << "Assignment 1 - Revolution Solids - Current Revolution Axis: [" << RotationAxis << "]" << " - Current Curve Complexity:" << "[" << CurvePoints << "] - Revolution Steps:" << "[" << RevolutionSteps << "]";
 	glutSetWindowTitle(ss.str().c_str());
 }
 
@@ -621,25 +500,25 @@ GLvoid display(GLvoid) {
 
 	glBindVertexArray(VertexArrayIDs[0]);
 
-	if (faces.empty()) {
-		glUseProgram(basicShader);
+	if (Faces.empty()) {
+		glUseProgram(BasicShader);
 		shaderPlumbing();
-		glViewport(wWidth / 2, 0, wWidth / 2, wHeight);
-		glDrawArrays(GL_POINTS, 0, (GLsizei)points.size());
+		glViewport(WWidth / 2, 0, WWidth / 2, WHeight);
+		glDrawArrays(GL_POINTS, 0, (GLsizei)Points.size());
 	}
 	else {
-		glUseProgram(basicShader);
+		glUseProgram(BasicShader);
 		shaderPlumbing();
-		glViewport(wWidth / 2, 0, wWidth / 2, wHeight);
-		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, vertexbuffers[4]);
-		glDrawElements(viewMode, faces.size(), GL_UNSIGNED_INT, (void*)0);
+		glViewport(WWidth / 2, 0, WWidth / 2, WHeight);
+		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, VertexBuffers[4]);
+		glDrawElements(ViewMode, Faces.size(), GL_UNSIGNED_INT, (void*)0);
 		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
 	}
 
-	glUseProgram(axisShader);
+	glUseProgram(AxisShader);
 	shaderPlumbingAxis();
-	glViewport(wWidth / 2, 0, wWidth / 2, wHeight);
-	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, vertexbuffers[6]);
+	glViewport(WWidth / 2, 0, WWidth / 2, WHeight);
+	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, VertexBuffers[6]);
 	glDrawElements(GL_LINES, 6, GL_UNSIGNED_INT, (void*)0);
 	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
 
@@ -647,8 +526,16 @@ GLvoid display(GLvoid) {
 
 	glUseProgram(GUIShader);
 	shaderPlumbingGUI();
-	glViewport(0, 0, wWidth / 2, wHeight);
-	glDrawArrays(GL_POINTS, 0, (GLsizei)controlPoints.size());
+	glViewport(0, 0, WWidth / 2, WHeight);
+	glDrawArrays(GL_POINTS, 0, (GLsizei)ControlPoints.size());
+	if (GeneratedCurvePoints) {
+		//Plumbing the curve data by hand
+		glBindBuffer(GL_ARRAY_BUFFER, VertexBuffers[3]);
+		glEnableVertexAttribArray(glGetAttribLocation(GUIShader, "aPosition"));
+		glVertexAttribPointer(glGetAttribLocation(GUIShader, "aPosition"), 3, GL_FLOAT, GL_FALSE, 0, (GLvoid*)0);
+		glBindBuffer(GL_ARRAY_BUFFER, 0);
+		glDrawArrays(GL_LINE_STRIP, 0, GeneratedCurvePoints);
+	}
 
 	glutSwapBuffers();
 	glutPostRedisplay();
@@ -657,27 +544,27 @@ GLvoid display(GLvoid) {
 }
 
 GLvoid initShaders() {
-	basicShader = InitShader("basicShader.vert", "basicShader.frag");
+	BasicShader = InitShader("basicShader.vert", "basicShader.frag");
 	GUIShader = InitShader("GUIShader.vert", "GUIShader.frag");
-	axisShader = InitShader("axisShader.vert", "axisShader.frag");
+	AxisShader = InitShader("axisShader.vert", "axisShader.frag");
 }
 
 GLvoid generateFullRevolutionSolid() {
-	generateCurve(curvepoints);
-	rotatePoints(revolutionSteps);
+	generateCurve(CurvePoints);
+	rotatePoints(RevolutionSteps);
 	generateFaces();
 }
 
 GLvoid updateProjection() {
-	switch (currentView) {
+	switch (CurrentView) {
 	case '1':
 		View = glm::lookAt(
 			glm::vec3(3, 0, 0), //eye
 			glm::vec3(0, 0, 0), //center
 			glm::vec3(0, 1, 0)  //up
 		);
-		eyePos = glm::vec3(3, 0, 0);
-		Projection = glm::ortho(-orthoBoxSize, orthoBoxSize, -orthoBoxSize, orthoBoxSize, 0.0f, 100.0f);
+		EyePos = glm::vec3(3, 0, 0);
+		Projection = glm::ortho(-OrthoBoxSize, OrthoBoxSize, -OrthoBoxSize, OrthoBoxSize, 0.0f, 100.0f);
 		break;
 	case '2':
 		View = glm::lookAt(
@@ -685,8 +572,8 @@ GLvoid updateProjection() {
 			glm::vec3(0, 0, 0), //center
 			glm::vec3(1, 0, 0)  //up
 		);
-		eyePos = glm::vec3(0, 3, 0);
-		Projection = glm::ortho(-orthoBoxSize, orthoBoxSize, -orthoBoxSize, orthoBoxSize, 0.0f, 100.0f);
+		EyePos = glm::vec3(0, 3, 0);
+		Projection = glm::ortho(-OrthoBoxSize, OrthoBoxSize, -OrthoBoxSize, OrthoBoxSize, 0.0f, 100.0f);
 		break;
 	case '3':
 		View = glm::lookAt(
@@ -694,8 +581,8 @@ GLvoid updateProjection() {
 			glm::vec3(0, 0, 0), //center
 			glm::vec3(0, 1, 0)  //up
 		);
-		eyePos = glm::vec3(0, 0, 3);
-		Projection = glm::ortho(-orthoBoxSize, orthoBoxSize, -orthoBoxSize, orthoBoxSize, 0.0f, 100.0f);
+		EyePos = glm::vec3(0, 0, 3);
+		Projection = glm::ortho(-OrthoBoxSize, OrthoBoxSize, -OrthoBoxSize, OrthoBoxSize, 0.0f, 100.0f);
 		break;
 	case '4':
 		View = glm::lookAt(
@@ -703,21 +590,21 @@ GLvoid updateProjection() {
 			glm::vec3(0, 0, 0), //center
 			glm::vec3(0, 1, 0)  //up
 		);
-		eyePos = glm::vec3(3, 3, 3);
-		Projection = glm::perspective(glm::radians(perspFOV), (GLfloat)wWidth / (GLfloat)wHeight, 0.1f, 100.0f);
+		EyePos = glm::vec3(3, 3, 3);
+		Projection = glm::perspective(glm::radians(PerspFOV), (GLfloat)WWidth / (GLfloat)WHeight, 0.1f, 100.0f);
 		break;
 	}
 }
 
 GLvoid updateProjectionZoom() {
-	switch (currentView) {
+	switch (CurrentView) {
 	case '1':
 	case '2':
 	case '3':
-		Projection = glm::ortho(-orthoBoxSize, orthoBoxSize, -orthoBoxSize, orthoBoxSize, 0.0f, 100.0f);
+		Projection = glm::ortho(-OrthoBoxSize, OrthoBoxSize, -OrthoBoxSize, OrthoBoxSize, 0.0f, 100.0f);
 		break;
 	case '4':
-		Projection = glm::perspective(glm::radians(perspFOV), (GLfloat)wWidth / (GLfloat)wHeight, 0.1f, 100.0f);
+		Projection = glm::perspective(glm::radians(PerspFOV), (GLfloat)WWidth / (GLfloat)WHeight, 0.1f, 100.0f);
 		break;
 	}
 }
@@ -726,6 +613,21 @@ GLvoid keyboard(GLubyte key, GLint x, GLint y)
 {
 	switch (key)
 	{
+	case 'u':
+		initTextureData("steel.jpg");
+		SpecularStrength = 1.0f;
+		SpecularCoefficient = 128;
+		break;
+	case 'i':
+		initTextureData("fabric.jpg");
+		SpecularStrength = 0.1f;
+		SpecularCoefficient = 16;
+		break;
+	case 'o':
+		initTextureData("clay.jpg");
+		SpecularStrength = 0.3f;
+		SpecularCoefficient = 16;
+		break;
 	case 'q':
 		glPolygonMode(GL_FRONT_AND_BACK, GL_POINT);
 		break;
@@ -739,69 +641,69 @@ GLvoid keyboard(GLubyte key, GLint x, GLint y)
 	case '2':
 	case '3':
 	case '4':
-		currentView = key;
+		CurrentView = key;
 		updateProjection();
 		break;
 	case 'x':
 	case 'y':
 	case 'z':
-		rotationAxis = key;
+		RotationAxis = key;
 		updateTitle();
 		generateFullRevolutionSolid();
 		break;
 	case 'R':
-		resetRevolution();
+		//resetRevolution();
 		break;
 	case 'r':
-		rotatePoints(revolutionSteps);
+		//rotatePoints(RevolutionSteps);
 		break;
 	case 'C':
 		resetDrawing();
-		controlPoints.clear();
+		ControlPoints.clear();
 		break;
-	case 'c':
-		generateCurve(curvepoints);
-		break;
+		//case 'c':
+			//generateCurve(CurvePoints);
+			//break;
 	case 'f':
-		generateFaces();
+		//generateFaces();
 		break;
 	case 'a':
-		if (curvepoints > 3) {
-			--curvepoints;
+		if (CurvePoints > 3) {
+			--CurvePoints;
 		}
 		generateFullRevolutionSolid();
 		updateTitle();
 		break;
 	case 's':
-		++curvepoints;
+		++CurvePoints;
 		generateFullRevolutionSolid();
 		updateTitle();
 		break;
 	case ',':
-		if (revolutionSteps > 3) {
-			--revolutionSteps;
+		if (RevolutionSteps > 3) {
+			--RevolutionSteps;
 		}
 		generateFullRevolutionSolid();
 		updateTitle();
 		break;
 	case '.':
-		++revolutionSteps;
+		++RevolutionSteps;
 		generateFullRevolutionSolid();
 		updateTitle();
 		break;
 	case '0':
-		orthoBoxSize = 3.0f;
-		perspFOV = 45.0f;
+		OrthoBoxSize = 1.5f;
+		PerspFOV = 25.0f;
 		updateProjectionZoom();
 		break;
 	case '=':
-		orthoBoxSize *= 0.9;
-		perspFOV *= 0.9;
+		OrthoBoxSize *= 0.9;
+		PerspFOV *= 0.9;
 		updateProjectionZoom();
 		break;
 	case '-':
-		orthoBoxSize *= 1.1;
-		perspFOV *= 1.1;
+		OrthoBoxSize *= 1.1;
+		PerspFOV *= 1.1;
 		updateProjectionZoom();
 		break;
 	case 27:
@@ -819,10 +721,14 @@ GLvoid keyboard(GLubyte key, GLint x, GLint y)
 
 GLvoid reshape(GLint x, GLint y)
 {
-	wWidth = x;
-	wHeight = y;
+	WWidth = x;
+	WHeight = y;
 	glViewport(0, 0, x, y);
 	glutPostRedisplay();
+}
+
+GLvoid reorderPoints() {
+	std::sort(ControlPoints.begin(), ControlPoints.end(), [](Point a, Point b)->bool { return a.y > b.y; });
 }
 
 GLvoid mouseHandler(GLint button, GLint state, GLint x, GLint y) {
@@ -833,7 +739,7 @@ GLvoid mouseHandler(GLint button, GLint state, GLint x, GLint y) {
 	GLdouble posX, posY, posZ;
 
 	winX = (GLfloat)x;
-	winY = wHeight - (GLfloat)y;
+	winY = WHeight - (GLfloat)y;
 	glReadPixels(GLint(winX), GLint(winY), 1, 1, GL_DEPTH_COMPONENT, GL_FLOAT, &winZ);
 
 	glGetDoublev(GL_MODELVIEW_MATRIX, modelview);
@@ -842,79 +748,78 @@ GLvoid mouseHandler(GLint button, GLint state, GLint x, GLint y) {
 	gluUnProject(winX, winY, winZ, modelview, projection, viewport, &posX, &posY, &posZ);
 
 	if (button == GLUT_LEFT_BUTTON) {
-		if (winX <= wWidth / 2) {
-			if (state == GLUT_UP && !isDragging) {
-				controlPoints.push_back({ (GLfloat)posX, (GLfloat)posY, (GLfloat)0 });
-				controlPointsColors.push_back({ 1, 1, 1, 1.0f });
-				initControlPointBufferData();
-
+		if (winX <= WWidth / 2) {
+			if (state == GLUT_UP && !IsDragging) {
+				ControlPoints.push_back({ (GLfloat)posX, (GLfloat)posY, (GLfloat)0 });
+				reorderPoints();
 				generateFullRevolutionSolid();
-
+				initControlPointBufferData();
 				printf("Window (bottom left based): %.0f %.0f\n", winX, winY);
 				printf("World: %lf %lf %lf\n", posX, posY, posZ);
-				isDragging = false;
+				IsDragging = false;
 			}
 		}
 		else {
-			xOrigin = x;
-			yOrigin = y;
-			isDragging = true;
+			XOrigin = x;
+			YOrigin = y;
+			IsDragging = true;
 		}
 		if (state == GLUT_UP) {
-			xOrigin = -1;
-			yOrigin = -1;
-			isDragging = false;
+			XOrigin = -1;
+			YOrigin = -1;
+			IsDragging = false;
 		}
 	}
 	else if (GLUT_RIGHT_BUTTON) {
-		auto heldPointIterator = std::find_if(controlPoints.begin(), controlPoints.end(), [posX, posY](Point a)->bool { return abs(a.x - posX) < 0.03 && abs(a.y - posY) < 0.03; });
-		if (winX <= wWidth / 2) {
+		auto heldPointIterator = std::find_if(ControlPoints.begin(), ControlPoints.end(), [posX, posY](Point a)->bool { return abs(a.x - posX) < 0.05 && abs(a.y - posY) < 0.05; });
+		if (winX <= WWidth / 2) {
 			if (state == GLUT_DOWN) {
-				if (controlPoints.end() != heldPointIterator) {
-					heldPoint = &*heldPointIterator;
-					printf("Point Held: %lf %lf\n", (*heldPoint).x, (*heldPoint).y);
+				if (ControlPoints.end() != heldPointIterator) {
+					HeldPoint = &*heldPointIterator;
+					printf("Point Held: %lf %lf\n", (*HeldPoint).x, (*HeldPoint).y);
 				}
 			}
 			else if (state == GLUT_UP) {
 				if (glutGetModifiers() & GLUT_ACTIVE_SHIFT) {
-					if (controlPoints.end() != heldPointIterator && (controlPoints.begin() != controlPoints.end())) {
-						controlPoints.erase(heldPointIterator);
+					if (ControlPoints.end() != heldPointIterator && (ControlPoints.begin() != ControlPoints.end())) {
+						ControlPoints.erase(heldPointIterator);
 						initControlPointBufferData();
 					}
 				}
+				reorderPoints();
 				generateFullRevolutionSolid();
-				heldPoint = NULL;
+				initControlPointBufferData();
+				HeldPoint = NULL;
 			}
 		}
 	}
 }
 
 void mouseMove(GLint x, GLint y) {
-
 	// this will only be true when the left button is down
-	if (xOrigin >= 0) {
+	if (XOrigin >= 0) {
 		// update deltaAngle
-		deltaAngleX = (x - xOrigin) * 0.1f;
-		xOrigin = x;
+		DeltaAngleX = (x - XOrigin) * 0.1f;
+		XOrigin = x;
 
 		glm::vec3 xRotation = glm::vec3(glm::vec4(0.0, 1.0, 0.0, 1.0)*View);
-		View = glm::rotate(View, glm::radians(deltaAngleX), xRotation);
+		View = glm::rotate(View, glm::radians(DeltaAngleX), xRotation);
 		glm::mat4 viewInv = glm::inverse(View);
-		eyePos = glm::vec3(viewInv[3][0], viewInv[3][1], viewInv[3][2]);
+		EyePos = glm::vec3(viewInv[3][0], viewInv[3][1], viewInv[3][2]);
 	}
 
-	if (yOrigin >= 0) {
+	if (YOrigin >= 0) {
 		// update deltaAngle
-		deltaAngleY = (y - yOrigin) * 0.1f;
-		yOrigin = y;
+		DeltaAngleY = (y - YOrigin) * 0.1f;
+		YOrigin = y;
 
 		glm::vec3 yRotation = glm::vec3(glm::vec4(1.0, 0.0, 0.0, 1.0)*View);
-		View = glm::rotate(View, glm::radians(deltaAngleY), yRotation);
+		View = glm::rotate(View, glm::radians(DeltaAngleY), yRotation);
 		glm::mat4 viewInv = glm::inverse(View);
-		eyePos = glm::vec3(viewInv[3][0], viewInv[3][1], viewInv[3][2]);
+		EyePos = glm::vec3(viewInv[3][0], viewInv[3][1], viewInv[3][2]);
 	}
 
-	if (heldPoint != NULL) {
+	if (HeldPoint != NULL) {
 		GLint viewport[4];
 		GLdouble modelview[16];
 		GLdouble projection[16];
@@ -922,7 +827,7 @@ void mouseMove(GLint x, GLint y) {
 		GLdouble posX, posY, posZ;
 
 		winX = (GLfloat)x;
-		winY = wHeight - (GLfloat)y;
+		winY = WHeight - (GLfloat)y;
 		glReadPixels(GLint(winX), GLint(winY), 1, 1, GL_DEPTH_COMPONENT, GL_FLOAT, &winZ);
 
 		glGetDoublev(GL_MODELVIEW_MATRIX, modelview);
@@ -930,22 +835,21 @@ void mouseMove(GLint x, GLint y) {
 		glGetIntegerv(GL_VIEWPORT, viewport);
 		gluUnProject(winX, winY, winZ, modelview, projection, viewport, &posX, &posY, &posZ);
 
-		(*heldPoint).x = (GLfloat)posX;
-		(*heldPoint).y = (GLfloat)posY;
-		(*heldPoint).z = (GLfloat)0;
+		(*HeldPoint).x = (GLfloat)posX;
+		(*HeldPoint).y = (GLfloat)posY;
+		(*HeldPoint).z = (GLfloat)0;
 		initControlPointBufferData();
 	}
 }
-
 
 GLint initGL(GLint *argc, GLchar **argv)
 {
 	glutInit(argc, argv);
 	glutInitDisplayMode(GLUT_RGBA | GLUT_DOUBLE);
-	glutInitWindowSize(wWidth, wHeight);
+	glutInitWindowSize(WWidth, WHeight);
 	stringstream ss;
 	string target;
-	ss << "Assignment 1 - Revolution Solids - Current Revolution Axis: [" << rotationAxis << "]" << " - Current Curve Complexity:" << "[" << curvepoints << "] - Revolution Steps:" << "[" << revolutionSteps << "]";
+	ss << "Assignment 1 - Revolution Solids - Current Revolution Axis: [" << RotationAxis << "]" << " - Current Curve Complexity:" << "[" << CurvePoints << "] - Revolution Steps:" << "[" << RevolutionSteps << "]";
 	glutCreateWindow(ss.str().c_str());
 	glutDisplayFunc(display);
 	glutKeyboardFunc(keyboard);
@@ -971,35 +875,25 @@ GLint main(GLint argc, GLchar **argv)
 		glm::vec3(0, 0, 0), //center
 		glm::vec3(0, 1, 0)  //up
 	);
-	eyePos = glm::vec3(3, 3, 3);
-	Projection = glm::perspective(glm::radians(perspFOV), (GLfloat)wWidth / (GLfloat)wHeight, 0.1f, 100.0f);
+	EyePos = glm::vec3(3, 3, 3);
+	Projection = glm::perspective(glm::radians(PerspFOV), (GLfloat)WWidth / (GLfloat)WHeight, 0.1f, 100.0f);
 
 #if defined(__linux__)
 	setenv("DISPLAY", ":0", 0);
-#endif	
+#endif
 
 	if (false == initGL(&argc, argv))
 	{
 		return EXIT_FAILURE;
 	}
 
-	texture = SOIL_load_image("steel.jpg", &wTex, &hTex, &cTex, SOIL_LOAD_RGB);
-
-
 	glGenVertexArrays(1, VertexArrayIDs);
-	glGenBuffers(9, vertexbuffers);
-	glGenTextures(1, textureBuffers);
+	glGenBuffers(9, VertexBuffers);
+	glGenTextures(1, TextureBuffers);
 
 	initShaders();
 
-	glActiveTexture(GL_TEXTURE0);
-	glBindTexture(GL_TEXTURE_2D, textureBuffers[0]);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
-	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, wTex, hTex, 0, GL_RGB, GL_UNSIGNED_BYTE, texture);
-	glUniform1i(glGetUniformLocation(basicShader, "tex"), 0);
+	initTextureData("steel.jpg");
 
 	initReferenceBufferData();
 

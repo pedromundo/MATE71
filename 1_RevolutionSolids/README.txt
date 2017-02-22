@@ -2,7 +2,7 @@ Instructions
 
 Draw the bezier curve control points on the leftmost half of the screen.
 Use the [left mouse] button to place points, [right mouse] button to
-move points and [shift]+[right mouse button ]to remove points. The 
+move points and [shift]+[right mouse] button to remove points. The 
 complexity of the final curve can the increased and decreased by 
 pressing the [a] and [s] keys. The revolution solid corresponding to
 the generated curve will be automatically generated on the rightmost

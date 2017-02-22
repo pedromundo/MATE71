@@ -19,12 +19,11 @@ visualization in and out respectivelly the [0] key resets the zoom.
 
 [q],[w],[e] change the visualization mode of the solid to points, tris
 and filled polygons respectivelly, while [u],[i] and [p] change the 
-texture and lighting parameters to simulate a highly specular (metal),
-almost completely diffuse (fabric) and slightly specular surface
-respectivelly.
+texture and lighting parameters to simulate a highly specular 
+(metal/plastic) almost completely diffuse (fabric) and slightly 
+specular surface (clay) respectively.
 
-By left-clicking  and dragging on the rightmost half of the screen,
-you can rotate the  "camera" around the center of the universe.
+By left-clicking and dragging on the rightmost half of the screen,
+you can rotate the "camera" around the origin. 
 
 Shift+[c] resets everything.
-

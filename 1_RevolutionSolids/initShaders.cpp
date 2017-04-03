@@ -27,7 +27,7 @@ static GLchar *readShaderSource(const GLchar *shaderFile) {
 	GLint c, d = 0;
 	GLchar *buf = new GLchar[st.st_size + 1];
 
-	while ((c = fgetc(fp)) != EOF){
+	while ((c = fgetc(fp)) != EOF) {
 		buf[d] = c;
 		++d;
 	}

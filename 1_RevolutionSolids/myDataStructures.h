@@ -6,10 +6,10 @@
 
 using namespace std;
 
-typedef struct Point{
+typedef struct Point {
 	GLfloat x;
 	GLfloat y;
-	GLfloat z;	
+	GLfloat z;
 	Point() { }
 	Point(GLfloat x, GLfloat y, GLfloat z) : x(x), y(y), z(z) {}
 } Point;

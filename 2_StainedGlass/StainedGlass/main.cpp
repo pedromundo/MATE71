@@ -1,5 +1,5 @@
 #include <stdio.h>
-#include <opencv\cv.h>
+#include <opencv/cv.h>
 #include <opencv2/core/utility.hpp>
 #include "opencv2/imgproc.hpp"
 #include "opencv2/imgcodecs.hpp"
@@ -16,7 +16,7 @@ using namespace std;
 
 Point prevPt(-1, -1);
 
-void applySobelXY(Mat &baseImage, Mat &sobelFinal) {
+void calculate_sobel_and_maps(Mat &baseImage, Mat &sobelFinal, Mat &displacementX, Mat &displacementY) {
 	//Sobel kernels
 	float arrKernelX[3][3] = { { -1,0,1 },{ -2,0,2 },{ -1,0,1 } };
 	float arrKernelY[3][3] = { { 1,2,1 },{ 0,0,0 },{ -1,-2,-1 } };
@@ -35,7 +35,30 @@ void applySobelXY(Mat &baseImage, Mat &sobelFinal) {
 	pow(sobelX, 2, sobelX);
 	pow(sobelY, 2, sobelY);
 	sobelFinal = sobelX + sobelY;
-	sqrt(sobelFinal, sobelFinal); //Final sobel magniture
+	sqrt(sobelFinal, sobelFinal);
+	GaussianBlur(sobelFinal, sobelFinal, Size(9, 9), 3, 3);
+
+	float displacement_arr_x[3][3] = { { -1,0,1 },{ -1,0,1 },{ -1,0,1 } };
+	float displacement_arr_y[3][3] = { { 1,1,1 },{ 0,0,0 },{ -1,-1,-1 } };
+
+	Mat kernelDisplace = Mat(3, 3, CV_32F, displacement_arr_x);
+	filter2D(sobelFinal, displacementX, -1, kernelDisplace);
+
+	kernelDisplace = Mat(3, 3, CV_32F, displacement_arr_y);
+	filter2D(sobelFinal, displacementY, -1, kernelDisplace);
+
+	//Getting grayscale 3-channel version of these images
+	sobelFinal.convertTo(sobelFinal, CV_8UC1);
+	cvtColor(sobelFinal, sobelFinal, COLOR_BGR2GRAY);
+	cvtColor(sobelFinal, sobelFinal, COLOR_GRAY2BGR);
+
+	displacementX.convertTo(displacementX, CV_8UC3);
+	cvtColor(displacementX, displacementX, COLOR_BGR2GRAY);
+	cvtColor(displacementX, displacementX, COLOR_GRAY2BGR);
+
+	displacementY.convertTo(displacementY, CV_8UC3);
+	cvtColor(displacementY, displacementY, COLOR_BGR2GRAY);
+	cvtColor(displacementY, displacementY, COLOR_GRAY2BGR);
 }
 
 void calculateSDMean(vector<unsigned char> data, float &SD, float &mean)
@@ -168,7 +191,6 @@ map<int, std::vector<std::array<int, 2>>> get_watershed_groups(Mat thresholdImag
 int main(int argc, char** argv)
 {
 	string filename = "flor.jpg";
-Reset:
 	double threshFactor = 0.38;
 	bool inverse = true;
 	int autoTechnique = 0;
@@ -313,14 +335,21 @@ Start: //I'm sorry, I'm truly sorry!
 			int a = currPixel.val[1];
 			int b = currPixel.val[2];
 
-			l -= meanL;
-			l = /*(sdL_V / sdL) **/ l + meanL_V;
+			l -= (int)meanL;
+			l = (int)((sdL_V / sdL) * l + meanL_V);
 
-			a -= meanA;
-			a = (sdA_V / sdA) * a + meanA_V;
+			if (l > 255) {
+				l = 255;
+			}
+			if (l < 0) {
+				l = 0;
+			}
 
-			b -= meanB;
-			b = (sdB_V / sdB) * b + meanB_V;
+			a -= (int)meanA;
+			a = (int)((sdA_V / sdA) * a + meanA_V);
+
+			b -= (int)meanB;
+			b = (int)((sdB_V / sdB) * b + meanB_V);
 
 			currPixel = Vec3b(l, a, b);
 
@@ -332,34 +361,65 @@ Start: //I'm sorry, I'm truly sorry!
 	cvtColor(imgCoerced, imgCoerced, COLOR_Lab2BGR);
 	cvtColor(imgBase, imgBase, COLOR_Lab2BGR);
 
-	//Simplified synthesis of calmes, however, unlike the paper, I add the calmes after the glass-filter
-	//I also changed the way we generate the calmes, mine is simpler and kinda works.
+	//Getting edge magnitude and displacement maps
+	Mat sobelFinal, displacementH, displacementV, imgDisplaced(imgCoerced.size(), CV_8UC3);
+	calculate_sobel_and_maps(imgCoerced, sobelFinal, displacementH, displacementV);
+
+	//Filters are initially too strong
+	displacementH /= 4;
+	displacementV /= 4;
+
+	//Displace horizontally
+	for (int i = 0; i < displacementH.rows; i++) {
+		for (int j = 0; j < displacementH.cols; j++)
+		{
+			auto dj = displacementH.at<Vec3b>(i, j)[0];
+			auto tentativeJ = j + dj;
+			if (tentativeJ > displacementH.cols - 1) {
+				tentativeJ = displacementH.cols - 1;
+			}
+			if (tentativeJ < 0) {
+				tentativeJ = 0;
+			}
+			imgDisplaced.at<cv::Vec3b>(i, j) = imgCoerced.at<cv::Vec3b>(i, tentativeJ);
+		}
+	}
+
+	imgCoerced = imgDisplaced;
+
+	//Displace vertically
+	for (int i = 0; i < displacementV.rows; i++) {
+		for (int j = 0; j < displacementV.cols; j++)
+		{
+			auto di = displacementV.at<Vec3b>(i, j)[0];
+			auto tentativeI = i + di;
+			if (tentativeI > displacementV.rows - 1) {
+				tentativeI = displacementV.rows - 1;
+			}
+			if (tentativeI < 0) {
+				tentativeI = 0;
+			}
+			imgDisplaced.at<cv::Vec3b>(i, j) = imgCoerced.at<cv::Vec3b>(tentativeI, j);
+		}
+	}
+
+	//Simplified synthesis of calmes. Unlike the paper, I add the calmes after the glass-filter
+	//Also unlike the paper, I don't have to cut out real calmes(es?) beforehand
 	Mat colorCalmes, blurredCalmesMask;
 	blur(calmesMask, blurredCalmesMask, Size(9, 9));//Lets blur the calmes to get some soft edges later
 	imgZinc.copyTo(colorCalmes, calmesMask);
 	Mat softEdges = blurredCalmesMask - calmesMask; //softedges
 
 	//Smooth out and emboss the calmes
-	float embossKernel[3][3] = { { -2,-1,0 },{ -1,1,1},{ 0,1,2 } };
+	float embossKernel[3][3] = { { -3,-1,0 },{ -1,1,1 },{ 0,1,3 } };
 	GaussianBlur(colorCalmes, colorCalmes, Size(7, 7), 0, 0);
 	Mat kernelSobel = Mat(3, 3, CV_32F, embossKernel);
 	filter2D(colorCalmes, colorCalmes, -1, kernelSobel); //applying emboss to the calmes
 
-	//Applying sobel and blurring the result
-	Mat sobelFinal;
-	applySobelXY(imgCoerced, sobelFinal);
-	GaussianBlur(sobelFinal, sobelFinal, Size(9, 9), 3, 3);
-
-	//Getting grayscale version of the sobel image, but with 3 channels
-	sobelFinal.convertTo(sobelFinal, CV_8UC1); //Going back to uchar color values
-	cvtColor(sobelFinal, sobelFinal, COLOR_BGR2GRAY);
-	cvtColor(sobelFinal, sobelFinal, COLOR_GRAY2BGR);
-
-
 	colorCalmes.copyTo(imgCoerced, calmesMask);
 
-	imgCoerced = imgCoerced + sobelFinal;
-	imgCoerced = imgCoerced - softEdges * 0.5;
+	imgCoerced = imgCoerced + sobelFinal * 0.8;
+	imgCoerced = imgCoerced - softEdges * 0.8;
 	//imshow("Calmes Mask", calmesMask);
 	//imshow("Sobel", sobelFinal);
 	imshow("Base Image", img0);
@@ -428,6 +488,7 @@ Start: //I'm sorry, I'm truly sorry!
 			goto Start;
 		}
 		if (c == 'o') {
+			cout << "Enter filename: ";
 			cin >> filename;
 			threshFactor = 0.3;
 			autoTechnique = 0;
@@ -445,9 +506,6 @@ Start: //I'm sorry, I'm truly sorry!
 		if (c == '-') {
 			threshFactor -= 0.02;
 			goto Start;
-		}
-		if (c == 'r') {
-			goto Reset;
 		}
 		if (c == 't') {
 			switch (autoTechnique) {

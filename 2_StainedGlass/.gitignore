@@ -1,0 +1,41 @@
+# Compiled object files
+*.o
+*.obj
+
+# Precompiled headers
+*.gch
+*.pch
+
+# Compiled dynamic libraries
+*.so
+*.dylib
+*.dll
+
+# Executables
+*.exe
+*.out
+*.app
+RevolutionSolids
+
+# Build directories
+build/
+.xmake/
+BinDepends/
+
+# Xcode files
+*.xcodeproj/
+*.xcworkspace/
+
+# Visual Studio files
+.vs/
+*.sln
+*.vcxproj*
+*.filters
+*.user
+
+# Other development files
+*.swp
+*.swo
+*~
+.DS_Store
+.vscode

@@ -1,11 +1,17 @@
 //OpenGL Stuff
 #include <algorithm>
 #include <GL/glew.h>
+
+#if defined(__APPLE__) || defined(MACOSX)
+#include <GLUT/glut.h>
+#else
 #include <GL/glut.h>
+#endif
+
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
-#include <SOIL.h>
+#include <SOIL2/SOIL2.h>
 #include <stdio.h>
 #include <math.h>
 #include <string>
@@ -113,8 +119,8 @@ GLvoid initReferenceBufferData() {
 	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
 }
 
-GLvoid initTextureData(char* filename) {
-	Texture = SOIL_load_image(filename, &WTex, &HTex, &CTex, SOIL_LOAD_RGB);
+GLvoid initTextureData(const std::string& filename) {
+	Texture = SOIL_load_image(filename.data(), &WTex, &HTex, &CTex, SOIL_LOAD_RGB);
 	glActiveTexture(GL_TEXTURE0);
 	glBindTexture(GL_TEXTURE_2D, TextureBuffers[0]);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
@@ -200,7 +206,7 @@ void rotatePoints(GLint steps) {
 }
 
 inline void pushNormal(GLint i, GLint gridSize, GLint columnSize) {
-	//Verificar se ele é do começo ou do fim da linha
+	//Verificar se ele Ã© do comeÃ§o ou do fim da linha
 	GLint direita = i + columnSize, esquerda = i - columnSize;
 	if (direita > gridSize - 1) {
 		direita = direita - gridSize;
@@ -415,6 +421,11 @@ GLvoid shaderPlumbing() {
 	GLuint MId = glGetUniformLocation(BasicShader, "M");
 	glUniformMatrix4fv(MId, 1, GL_FALSE, glm::value_ptr(M));
 
+	// Calculate normal matrix (transpose of inverse of model matrix)
+	glm::mat3 normalMatrix = glm::transpose(glm::inverse(glm::mat3(Model)));
+	GLuint normalMatrixId = glGetUniformLocation(BasicShader, "normalMatrix");
+	glUniformMatrix3fv(normalMatrixId, 1, GL_FALSE, glm::value_ptr(normalMatrix));
+
 	//MVP matrix
 	glm::mat4 MVP = Projection * View * Model;
 	GLuint MVPId = glGetUniformLocation(BasicShader, "MVP");
@@ -613,21 +624,24 @@ GLvoid keyboard(GLubyte key, GLint x, GLint y)
 {
 	switch (key)
 	{
-	case 'u':
+	case 'u': {
 		initTextureData("steel.jpg");
 		SpecularStrength = 1.0f;
 		SpecularCoefficient = 128;
 		break;
-	case 'i':
+	}
+	case 'i': {
 		initTextureData("fabric.jpg");
 		SpecularStrength = 0.1f;
 		SpecularCoefficient = 16;
 		break;
-	case 'o':
+	}
+	case 'o': {
 		initTextureData("clay.jpg");
 		SpecularStrength = 0.3f;
 		SpecularCoefficient = 16;
 		break;
+	}
 	case 'q':
 		glPolygonMode(GL_FRONT_AND_BACK, GL_POINT);
 		break;
@@ -844,19 +858,36 @@ void mouseMove(GLint x, GLint y) {
 
 GLint initGL(GLint *argc, GLchar **argv)
 {
+	printf("Initializing GLUT...\n");
 	glutInit(argc, argv);
-	glutInitDisplayMode(GLUT_RGBA | GLUT_DOUBLE);
+
+	printf("Setting display mode...\n");
+	glutInitDisplayMode(GLUT_RGBA | GLUT_DOUBLE | GLUT_DEPTH);
+	printf("Setting window size...\n");
 	glutInitWindowSize(WWidth, WHeight);
 	stringstream ss;
 	string target;
 	ss << "Assignment 1 - Revolution Solids - Current Revolution Axis: [" << RotationAxis << "]" << " - Current Curve Complexity:" << "[" << CurvePoints << "] - Revolution Steps:" << "[" << RevolutionSteps << "]";
+	printf("Creating window...\n");
 	glutCreateWindow(ss.str().c_str());
+	printf("Setting callbacks...\n");
 	glutDisplayFunc(display);
 	glutKeyboardFunc(keyboard);
 	glutReshapeFunc(reshape);
 	glutMouseFunc(mouseHandler);
 	glutMotionFunc(mouseMove);
-	glewInit();
+
+	// Initialize GLEW with experimental mode for modern OpenGL
+	printf("Initializing GLEW...\n");
+	glewExperimental = GL_TRUE;
+	GLenum glewError = glewInit();
+
+	printf("GLEW initialized successfully\n");
+	printf("OpenGL Version: %s\n", glGetString(GL_VERSION));
+	printf("GLSL Version: %s\n", glGetString(GL_SHADING_LANGUAGE_VERSION));
+	printf("Renderer: %s\n", glGetString(GL_RENDERER));
+	printf("Vendor: %s\n", glGetString(GL_VENDOR));
+
 	return 1;
 }
 
@@ -867,6 +898,7 @@ inline GLfloat interpolate(const GLfloat a, const GLfloat b, const GLfloat coeff
 
 GLint main(GLint argc, GLchar **argv)
 {
+	printf("Starting main function...\n");
 	//Setting up our MVP Matrices
 
 	Model = glm::mat4(1.0f);
@@ -880,6 +912,10 @@ GLint main(GLint argc, GLchar **argv)
 
 #if defined(__linux__)
 	setenv("DISPLAY", ":0", 0);
+#elif defined(__APPLE__)
+	#include <GLUT/glut.h>
+#else
+	#include <GL/glut.h>
 #endif
 
 	if (false == initGL(&argc, argv))
@@ -887,15 +923,28 @@ GLint main(GLint argc, GLchar **argv)
 		return EXIT_FAILURE;
 	}
 
+	printf("Initializing OpenGL buffers...\n");
 	glGenVertexArrays(1, VertexArrayIDs);
+	printf("Generated VAOs\n");
 	glGenBuffers(9, VertexBuffers);
+	printf("Generated VBOs\n");
 	glGenTextures(1, TextureBuffers);
+	printf("Generated textures\n");
 
+	printf("Initializing shaders...\n");
 	initShaders();
+	printf("Shaders initialized\n");
 
-	initTextureData("steel.jpg");
+	printf("Initializing texture data...\n");
+	const char* texturePath = "steel.jpg";
+	initTextureData(const_cast<char*>(texturePath));
+	printf("Texture data initialized\n");
 
+	printf("Initializing reference buffers...\n");
 	initReferenceBufferData();
+	printf("Reference buffers initialized\n");
 
+	printf("Entering main loop...\n");
 	glutMainLoop();
+	printf("Main loop exited\n");
 }

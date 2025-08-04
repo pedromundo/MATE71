@@ -2,7 +2,12 @@
 #define MY_DATA_STRUCTURES 1
 
 #include <vector>
+
+#if defined(__APPLE__) || defined(MACOSX)
+#include <OpenGL/gl.h>
+#else
 #include <GL/gl.h>
+#endif
 
 using namespace std;
 
